@@ -59,7 +59,7 @@ model Product {
   summary          String
   description      String?
   imageUrl         String?
-  price            Decimal     @db.Decimal(12, 2)
+  price            Float
   isActive         Boolean     @default(true)
   category         Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId       String     @db.ObjectId
@@ -97,8 +97,8 @@ model PartnerProfile {
   userId         String              @unique @db.ObjectId
   programType    PartnerProgramType
   referralCode   String              @unique
-  balance        Decimal             @default(0) @db.Decimal(12, 2)
-  bonus          Decimal             @default(0) @db.Decimal(12, 2)
+  balance        Float               @default(0)
+  bonus          Float               @default(0)
   totalPartners  Int                 @default(0)
   directPartners Int                 @default(0)
   multiPartners  Int                 @default(0)
@@ -122,7 +122,7 @@ model PartnerTransaction {
   id          String            @id @default(auto()) @map("_id") @db.ObjectId
   profile     PartnerProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId   String            @db.ObjectId
-  amount      Decimal           @db.Decimal(12, 2)
+  amount      Float
   type        TransactionType
   description String
   createdAt   DateTime          @default(now())

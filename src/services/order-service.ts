@@ -2,14 +2,14 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 
 interface OrderItemPayload {
-  productId: number;
+  productId: string;
   title: string;
   price: number;
   quantity: number;
 }
 
 export async function createOrderRequest(params: {
-  userId?: number;
+  userId?: string;
   contact?: string;
   message: string;
   items: OrderItemPayload[];

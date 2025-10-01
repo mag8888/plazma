@@ -18,7 +18,7 @@ async function ensureReferralCode(): Promise<string> {
   }
 }
 
-export async function getOrCreatePartnerProfile(userId: number, programType: PartnerProgramType) {
+export async function getOrCreatePartnerProfile(userId: string, programType: PartnerProgramType) {
   const existing = await prisma.partnerProfile.findUnique({ where: { userId } });
   if (existing) {
     if (existing.programType !== programType) {
@@ -42,7 +42,7 @@ export function buildReferralLink(code: string) {
   return `${base}/?ref=${code}`;
 }
 
-export async function getPartnerDashboard(userId: number) {
+export async function getPartnerDashboard(userId: string) {
   const profile = await prisma.partnerProfile.findUnique({
     where: { userId },
     include: {
@@ -67,18 +67,18 @@ export async function getPartnerDashboard(userId: number) {
   };
 }
 
-export async function recordPartnerTransaction(profileId: number, amount: Prisma.Decimal | number, description: string, type: TransactionType = 'CREDIT') {
+export async function recordPartnerTransaction(profileId: string, amount: number, description: string, type: TransactionType = 'CREDIT') {
   return prisma.partnerTransaction.create({
     data: {
       profileId,
-      amount: new Prisma.Decimal(amount),
+      amount,
       description,
       type,
     },
   });
 }
 
-export async function createPartnerReferral(profileId: number, level: number, referredId?: number, contact?: string) {
+export async function createPartnerReferral(profileId: string, level: number, referredId?: string, contact?: string) {
   return prisma.partnerReferral.create({
     data: {
       profileId,

@@ -20,7 +20,7 @@ async function showCategories(ctx: Context) {
     return;
   }
 
-  const buttons = categories.map((category) => [
+  const buttons = categories.map((category: any) => [
     Markup.button.callback(category.name, `${CATEGORY_ACTION_PREFIX}${category.id}`),
   ]);
 
@@ -32,7 +32,7 @@ function formatProductMessage(product: { title: string; summary: string; price: 
   return `💧 ${product.title}\n${product.summary}\n\nЦена: ${price.toFixed(2)} ₽`;
 }
 
-async function sendProductCards(ctx: Context, categoryId: number) {
+async function sendProductCards(ctx: Context, categoryId: string) {
   const category = await getCategoryById(categoryId);
   if (!category) {
     await ctx.reply('Категория не найдена.');
@@ -59,7 +59,7 @@ async function sendProductCards(ctx: Context, categoryId: number) {
   }
 }
 
-async function handleAddToCart(ctx: Context, productId: number) {
+async function handleAddToCart(ctx: Context, productId: string) {
   const user = await ensureUser(ctx);
   if (!user) {
     await ctx.reply('Не удалось определить пользователя. Попробуйте позже.');
@@ -78,7 +78,7 @@ async function handleAddToCart(ctx: Context, productId: number) {
   await ctx.reply(`«${product.title}» добавлен(а) в корзину.`);
 }
 
-async function handleProductMore(ctx: Context, productId: number) {
+async function handleProductMore(ctx: Context, productId: string) {
   const product = await getProductById(productId);
   if (!product || !product.description) {
     await ctx.answerCbQuery('Описание не найдено');
@@ -90,7 +90,7 @@ async function handleProductMore(ctx: Context, productId: number) {
   await ctx.reply(`ℹ️ ${product.title}\n\n${product.description}`);
 }
 
-async function handleBuy(ctx: Context, productId: number) {
+async function handleBuy(ctx: Context, productId: string) {
   const user = await ensureUser(ctx);
   if (!user) {
     await ctx.reply('Не удалось определить пользователя. Попробуйте позже.');
@@ -124,7 +124,7 @@ async function handleBuy(ctx: Context, productId: number) {
 
   const message = lines.join('\n');
 
-  const itemsPayload = cartItems.map((item) => ({
+  const itemsPayload = cartItems.map((item: any) => ({
     productId: item.productId,
     title: item.product.title,
     price: Number(item.product.price),
@@ -160,29 +160,29 @@ export const shopModule: BotModule = {
       await showCategories(ctx);
     });
 
-    bot.action(new RegExp(`^${CATEGORY_ACTION_PREFIX}(\\d+)$`), async (ctx) => {
+    bot.action(new RegExp(`^${CATEGORY_ACTION_PREFIX}(.+)$`), async (ctx) => {
       const match = ctx.match as RegExpExecArray;
-      const categoryId = Number(match[1]);
+      const categoryId = match[1];
       await ctx.answerCbQuery();
       await logUserAction(ctx, 'shop:category', { categoryId });
       await sendProductCards(ctx, categoryId);
     });
 
-    bot.action(new RegExp(`^${PRODUCT_MORE_PREFIX}(\\d+)$`), async (ctx) => {
+    bot.action(new RegExp(`^${PRODUCT_MORE_PREFIX}(.+)$`), async (ctx) => {
       const match = ctx.match as RegExpExecArray;
-      const productId = Number(match[1]);
+      const productId = match[1];
       await handleProductMore(ctx, productId);
     });
 
-    bot.action(new RegExp(`^${PRODUCT_CART_PREFIX}(\\d+)$`), async (ctx) => {
+    bot.action(new RegExp(`^${PRODUCT_CART_PREFIX}(.+)$`), async (ctx) => {
       const match = ctx.match as RegExpExecArray;
-      const productId = Number(match[1]);
+      const productId = match[1];
       await handleAddToCart(ctx, productId);
     });
 
-    bot.action(new RegExp(`^${PRODUCT_BUY_PREFIX}(\\d+)$`), async (ctx) => {
+    bot.action(new RegExp(`^${PRODUCT_BUY_PREFIX}(.+)$`), async (ctx) => {
       const match = ctx.match as RegExpExecArray;
-      const productId = Number(match[1]);
+      const productId = match[1];
       await handleBuy(ctx, productId);
     });
   },

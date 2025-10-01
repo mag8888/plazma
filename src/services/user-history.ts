@@ -28,7 +28,7 @@ export async function ensureUser(ctx: Context) {
   return user;
 }
 
-export async function logUserAction(ctx: Context, action: string, payload?: Prisma.JsonValue) {
+export async function logUserAction(ctx: Context, action: string, payload?: any) {
   const user = await ensureUser(ctx);
   if (!user) return;
 
