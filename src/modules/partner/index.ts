@@ -10,11 +10,21 @@ const DIRECT_PLAN_ACTION = 'partner:plan:direct';
 const MULTI_PLAN_ACTION = 'partner:plan:multi';
 const PARTNERS_ACTION = 'partner:list';
 const INVITE_ACTION = 'partner:invite';
+const PARTNERS_LEVEL_1_ACTION = 'partner:level:1';
+const PARTNERS_LEVEL_2_ACTION = 'partner:level:2';
+const PARTNERS_LEVEL_3_ACTION = 'partner:level:3';
 
 const programIntro = `✨ Описание партнёрской программы
 
 👋 Станьте партнёром Plazma Water!
-Вы можете рекомендовать друзьям здоровье и получать пассивный доход.`;
+Вы можете рекомендовать друзьям здоровье и получать пассивный доход.
+
+💸 25% от каждой покупки по вашей ссылке.
+🔗 Достаточно поделиться своей персональной ссылкой.
+
+⸻
+
+📌 У нас есть 2 формата участия:`;
 
 const cardTemplate = (params: {
   balance: string;
@@ -24,20 +34,21 @@ const cardTemplate = (params: {
   referral?: string;
   transactions: string[];
 }) => `🧾 Карточка клиента (личный кабинет)
- • 💰 Баланс: ${params.balance} ₽
- • 👥 Партнёры: ${params.partners}
- • 🎁 Бонусы: ${params.bonus} ₽
-${params.referral ? ` • 🔗 Ваша ссылка: ${params.referral}` : ' • 🔗 Ваша ссылка: выберите формат программы'}
-${params.transactions.length ? ` • 📊 История начислений:\n${params.transactions.join('\n')}` : ' • 📊 История начислений: пока нет данных'}`;
+	•	💰 Баланс: [${params.balance} ₽]
+	•	👥 Партнёры: [${params.partners}]
+	•	🎁 Бонусы: [${params.bonus} ₽]
+${params.referral ? `	•	🔗 Ваша ссылка: [${params.referral}]` : '	•	🔗 Ваша ссылка: [выберите формат программы]'}
+${params.transactions.length ? `	•	📊 История начислений: [список транзакций]\n${params.transactions.join('\n')}` : '	•	📊 История начислений: [список транзакций]'}`;
 
-const directPlanText = `Прямая комиссия — 25%
+const directPlanText = `(на кнопку 25%) Прямая комиссия — 25%
 Делитесь ссылкой → получаете 25% от всех покупок друзей.
-📲 Выбирайте удобный формат и начинайте зарабатывать уже сегодня! (выбрав этот формат вы не будете получать доход от партнеров второго и 3го уровня)`;
 
-const multiPlanText = `Многоуровневая система — 15% + 5% + 5%
- • 15% с покупок ваших друзей (1-й уровень)
- • 5% с покупок их друзей (2-й уровень)
- • 5% с покупок следующего уровня (3-й уровень)
+📲 Выбирайте удобный формат и начинайте зарабатывать уже сегодня!`;
+
+const multiPlanText = `(на кнопку 15% + 5% + 5%) Многоуровневая система — 15% + 5% + 5%
+	•	15% с покупок ваших друзей (1-й уровень)
+	•	5% с покупок их друзей (2-й уровень)
+	•	5% с покупок следующего уровня (3-й уровень)
 
 📲 Выбирайте удобный формат и начинайте зарабатывать уже сегодня!`;
 
@@ -51,6 +62,7 @@ function planKeyboard() {
 function partnerActionsKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('Мои партнёры', PARTNERS_ACTION), Markup.button.callback('Пригласить друга', INVITE_ACTION)],
+    [Markup.button.callback('Партнёры: 1-й', PARTNERS_LEVEL_1_ACTION), Markup.button.callback('Партнёры: 2-й', PARTNERS_LEVEL_2_ACTION), Markup.button.callback('Партнёры: 3-й', PARTNERS_LEVEL_3_ACTION)],
   ]);
 }
 
@@ -117,6 +129,37 @@ async function showPartners(ctx: Context) {
   await ctx.reply(`👥 Мои партнёры\nВсего: ${stats.partners}\nПрямых: ${stats.directPartners}`);
 }
 
+async function showPartnersByLevel(ctx: Context, level: number) {
+  const user = await ensureUser(ctx);
+  if (!user) {
+    await ctx.reply('Не удалось загрузить список партнёров.');
+    return;
+  }
+
+  const dashboard = await getPartnerDashboard(user.id);
+  if (!dashboard) {
+    await ctx.reply('Вы ещё не активировали программу.');
+    return;
+  }
+
+  await ctx.answerCbQuery();
+  
+  let message = `👥 Партнёры ${level}-го уровня\n\n`;
+  
+  if (level === 1) {
+    message += `Прямые партнёры: ${dashboard.stats.directPartners}\n`;
+    message += `Получаете 15% с их покупок`;
+  } else if (level === 2) {
+    message += `Партнёры 2-го уровня: ${dashboard.stats.multiPartners}\n`;
+    message += `Получаете 5% с их покупок`;
+  } else if (level === 3) {
+    message += `Партнёры 3-го уровня: ${dashboard.stats.partners - dashboard.stats.directPartners - dashboard.stats.multiPartners}\n`;
+    message += `Получаете 5% с их покупок`;
+  }
+  
+  await ctx.reply(message);
+}
+
 async function showInvite(ctx: Context) {
   const user = await ensureUser(ctx);
   if (!user) {
@@ -163,6 +206,21 @@ export const partnerModule: BotModule = {
     bot.action(INVITE_ACTION, async (ctx) => {
       await logUserAction(ctx, 'partner:invite');
       await showInvite(ctx);
+    });
+
+    bot.action(PARTNERS_LEVEL_1_ACTION, async (ctx) => {
+      await logUserAction(ctx, 'partner:level:1');
+      await showPartnersByLevel(ctx, 1);
+    });
+
+    bot.action(PARTNERS_LEVEL_2_ACTION, async (ctx) => {
+      await logUserAction(ctx, 'partner:level:2');
+      await showPartnersByLevel(ctx, 2);
+    });
+
+    bot.action(PARTNERS_LEVEL_3_ACTION, async (ctx) => {
+      await logUserAction(ctx, 'partner:level:3');
+      await showPartnersByLevel(ctx, 3);
     });
   },
 };

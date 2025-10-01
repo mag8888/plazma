@@ -6,6 +6,7 @@ import { shopModule } from '../modules/shop/index.js';
 import { partnerModule } from '../modules/partner/index.js';
 import { reviewsModule } from '../modules/reviews/index.js';
 import { aboutModule } from '../modules/about/index.js';
+import { adminModule } from '../modules/admin/index.js';
 
 const modules: BotModule[] = [
   navigationModule,
@@ -13,6 +14,7 @@ const modules: BotModule[] = [
   partnerModule,
   reviewsModule,
   aboutModule,
+  adminModule,
 ];
 
 export async function applyBotModules(bot: Telegraf<Context>) {

@@ -63,6 +63,7 @@ export async function getPartnerDashboard(userId: string) {
     stats: {
       partners,
       directPartners: await prisma.partnerReferral.count({ where: { profileId: profile.id, level: 1 } }),
+      multiPartners: await prisma.partnerReferral.count({ where: { profileId: profile.id, level: 2 } }),
     },
   };
 }
