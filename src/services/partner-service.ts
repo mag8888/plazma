@@ -37,9 +37,10 @@ export async function getOrCreatePartnerProfile(userId: string, programType: Par
   });
 }
 
-export function buildReferralLink(code: string) {
-  // Create Telegram bot link with referral parameter
-  return `https://t.me/PlazmaWaterBot?start=ref_${code}`;
+export function buildReferralLink(code: string, programType: 'DIRECT' | 'MULTI_LEVEL') {
+  // Create Telegram bot link with referral parameter based on program type
+  const prefix = programType === 'DIRECT' ? 'ref_direct' : 'ref_multi';
+  return `https://t.me/PlazmaWaterBot?start=${prefix}_${code}`;
 }
 
 export async function getPartnerDashboard(userId: string) {

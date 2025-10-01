@@ -10,6 +10,8 @@ const DIRECT_PLAN_ACTION = 'partner:plan:direct';
 const MULTI_PLAN_ACTION = 'partner:plan:multi';
 const PARTNERS_ACTION = 'partner:list';
 const INVITE_ACTION = 'partner:invite';
+const INVITE_DIRECT_ACTION = 'partner:invite:direct';
+const INVITE_MULTI_ACTION = 'partner:invite:multi';
 const PARTNERS_LEVEL_1_ACTION = 'partner:level:1';
 const PARTNERS_LEVEL_2_ACTION = 'partner:level:2';
 const PARTNERS_LEVEL_3_ACTION = 'partner:level:3';
@@ -62,6 +64,7 @@ function planKeyboard() {
 function partnerActionsKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('Мои партнёры', PARTNERS_ACTION), Markup.button.callback('Пригласить друга', INVITE_ACTION)],
+    [Markup.button.callback('Ссылка 25%', INVITE_DIRECT_ACTION), Markup.button.callback('Ссылка 15%+5%+5%', INVITE_MULTI_ACTION)],
     [Markup.button.callback('Партнёры: 1-й', PARTNERS_LEVEL_1_ACTION), Markup.button.callback('Партнёры: 2-й', PARTNERS_LEVEL_2_ACTION), Markup.button.callback('Партнёры: 3-й', PARTNERS_LEVEL_3_ACTION)],
   ]);
 }
@@ -91,7 +94,7 @@ async function showDashboard(ctx: Context) {
     partners: stats.partners,
     direct: stats.directPartners,
     bonus: Number(profile.bonus).toFixed(2),
-    referral: buildReferralLink(profile.referralCode),
+    referral: buildReferralLink(profile.referralCode, profile.programType),
     transactions,
   });
 
@@ -108,7 +111,7 @@ async function handlePlanSelection(ctx: Context, programType: PartnerProgramType
   const profile = await getOrCreatePartnerProfile(user.id, programType);
   await logUserAction(ctx, 'partner:select-program', { programType });
   await ctx.answerCbQuery('Программа активирована');
-  await ctx.reply(`${message}\n\nВаша ссылка: ${buildReferralLink(profile.referralCode)}`, partnerActionsKeyboard());
+  await ctx.reply(`${message}\n\nВаша ссылка: ${buildReferralLink(profile.referralCode, programType)}`, partnerActionsKeyboard());
 }
 
 async function showPartners(ctx: Context) {
@@ -173,8 +176,42 @@ async function showInvite(ctx: Context) {
     return;
   }
 
+  await ctx.answerCbQuery('Выберите тип ссылки', { show_alert: false });
+  await ctx.reply(`Ваши реферальные ссылки:\n\n🔗 Прямая ссылка (25% с покупок):\n${buildReferralLink(dashboard.profile.referralCode, 'DIRECT')}\n\n🔗 Многоуровневая ссылка (15% + 5% + 5%):\n${buildReferralLink(dashboard.profile.referralCode, 'MULTI_LEVEL')}`);
+}
+
+async function showDirectInvite(ctx: Context) {
+  const user = await ensureUser(ctx);
+  if (!user) {
+    await ctx.reply('Не удалось получить ссылку.');
+    return;
+  }
+
+  const dashboard = await getPartnerDashboard(user.id);
+  if (!dashboard) {
+    await ctx.reply('Активируйте один из тарифов, чтобы получить ссылку.');
+    return;
+  }
+
   await ctx.answerCbQuery('Ссылка скопирована', { show_alert: false });
-  await ctx.reply(`Поделитесь ссылкой: ${buildReferralLink(dashboard.profile.referralCode)}`);
+  await ctx.reply(`🔗 Прямая ссылка (25% с покупок):\n${buildReferralLink(dashboard.profile.referralCode, 'DIRECT')}`);
+}
+
+async function showMultiInvite(ctx: Context) {
+  const user = await ensureUser(ctx);
+  if (!user) {
+    await ctx.reply('Не удалось получить ссылку.');
+    return;
+  }
+
+  const dashboard = await getPartnerDashboard(user.id);
+  if (!dashboard) {
+    await ctx.reply('Активируйте один из тарифов, чтобы получить ссылку.');
+    return;
+  }
+
+  await ctx.answerCbQuery('Ссылка скопирована', { show_alert: false });
+  await ctx.reply(`🔗 Многоуровневая ссылка (15% + 5% + 5%):\n${buildReferralLink(dashboard.profile.referralCode, 'MULTI_LEVEL')}`);
 }
 
 export const partnerModule: BotModule = {
@@ -206,6 +243,16 @@ export const partnerModule: BotModule = {
     bot.action(INVITE_ACTION, async (ctx) => {
       await logUserAction(ctx, 'partner:invite');
       await showInvite(ctx);
+    });
+
+    bot.action(INVITE_DIRECT_ACTION, async (ctx) => {
+      await logUserAction(ctx, 'partner:invite:direct');
+      await showDirectInvite(ctx);
+    });
+
+    bot.action(INVITE_MULTI_ACTION, async (ctx) => {
+      await logUserAction(ctx, 'partner:invite:multi');
+      await showMultiInvite(ctx);
     });
 
     bot.action(PARTNERS_LEVEL_1_ACTION, async (ctx) => {

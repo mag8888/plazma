@@ -40,8 +40,10 @@ export const navigationModule: BotModule = {
       
       // Check if user came from referral link
       const startPayload = ctx.startPayload;
-      if (startPayload && startPayload.startsWith('ref_')) {
-        const referralCode = startPayload.replace('ref_', '');
+      if (startPayload && (startPayload.startsWith('ref_direct_') || startPayload.startsWith('ref_multi_'))) {
+        const [prefix, referralCode] = startPayload.split('_', 2);
+        const programType = prefix === 'ref' ? 'DIRECT' : 'MULTI_LEVEL';
+        
         try {
           // Find partner profile by referral code
           const { prisma } = await import('../../lib/prisma.js');
@@ -54,8 +56,16 @@ export const navigationModule: BotModule = {
             // Create referral record
             await createPartnerReferral(partnerProfile.id, 1, ctx.from?.id?.toString());
             
-            await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'}!`);
-            await logUserAction(ctx, 'partner:referral_joined', { referralCode, partnerId: partnerProfile.id });
+            const programText = programType === 'DIRECT' 
+              ? 'прямой программе (25% с покупок)'
+              : 'многоуровневой программе (15% + 5% + 5%)';
+              
+            await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!`);
+            await logUserAction(ctx, 'partner:referral_joined', { 
+              referralCode, 
+              partnerId: partnerProfile.id,
+              programType 
+            });
           }
         } catch (error) {
           console.error('Error processing referral:', error);

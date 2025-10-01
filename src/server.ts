@@ -2,7 +2,8 @@
 process.env.NODE_ENV = process.env.NODE_ENV || 'production';
 
 import express from 'express';
-import { session, Telegraf } from 'telegraf';
+import session from 'express-session';
+import { session as telegrafSession, Telegraf } from 'telegraf';
 import { env } from './config/env.js';
 import { Context, SessionData } from './bot/context.js';
 import { applyBotModules } from './bot/setup-modules.js';
@@ -21,6 +22,15 @@ async function bootstrap() {
 
     const app = express();
     app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
+
+    // Configure session middleware
+    app.use(session({
+      secret: process.env.SESSION_SECRET || 'plazma-bot-secret-key',
+      resave: false,
+      saveUninitialized: false,
+      cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+    }));
 
     // Web admin panel
     app.use('/admin', adminWebRouter);
@@ -39,7 +49,7 @@ async function bootstrap() {
       handlerTimeout: 30_000,
     });
 
-    bot.use(session<SessionData, Context>({ defaultSession: (): SessionData => ({}) }));
+    bot.use(telegrafSession<SessionData, Context>({ defaultSession: (): SessionData => ({}) }));
     await applyBotModules(bot);
 
     console.log('Starting bot in long polling mode...');

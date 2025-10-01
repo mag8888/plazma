@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import session from 'express-session';
 import { v2 as cloudinary } from 'cloudinary';
 import { prisma } from '../lib/prisma.js';
 
@@ -17,15 +18,16 @@ const router = express.Router();
 
 // Middleware to check admin access
 const requireAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const adminId = req.headers['x-admin-id'] as string;
-  if (adminId !== process.env.ADMIN_CHAT_ID) {
-    return res.status(403).json({ error: 'Access denied' });
+  const session = req.session as any;
+  if (!session.isAdmin) {
+    return res.redirect('/admin/login');
   }
   next();
 };
 
 // Admin login page
 router.get('/login', (req, res) => {
+  const error = req.query.error;
   res.send(`
     <!DOCTYPE html>
     <html>
@@ -33,43 +35,46 @@ router.get('/login', (req, res) => {
       <title>Plazma Bot Admin</title>
       <meta charset="utf-8">
       <style>
-        body { font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
-        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        body { font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; background: #f5f5f5; }
+        .login-container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #333; }
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
         button:hover { background: #0056b3; }
-        .error { color: red; margin-top: 10px; }
+        .error { color: red; margin-top: 10px; text-align: center; }
+        h2 { text-align: center; color: #333; margin-bottom: 30px; }
       </style>
     </head>
     <body>
-      <h2>🔧 Plazma Bot Admin</h2>
-      <form id="loginForm">
-        <div class="form-group">
-          <label>Admin ID:</label>
-          <input type="text" id="adminId" placeholder="Введите ваш Telegram ID" required>
-        </div>
-        <button type="submit">Войти</button>
-        <div id="error" class="error"></div>
-      </form>
-      
-      <script>
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-          e.preventDefault();
-          const adminId = document.getElementById('adminId').value;
-          localStorage.setItem('adminId', adminId);
-          window.location.href = '/admin';
-        });
-        
-        // Check if already logged in
-        const savedAdminId = localStorage.getItem('adminId');
-        if (savedAdminId) {
-          window.location.href = '/admin';
-        }
-      </script>
+      <div class="login-container">
+        <h2>🔧 Plazma Bot Admin</h2>
+        <form method="post" action="/admin/login">
+          <div class="form-group">
+            <label>Пароль:</label>
+            <input type="password" name="password" placeholder="Введите пароль" required>
+          </div>
+          <button type="submit">Войти</button>
+          ${error ? '<div class="error">Неверный пароль</div>' : ''}
+        </form>
+      </div>
     </body>
     </html>
   `);
+});
+
+// Handle login POST request
+router.post('/login', (req, res) => {
+  const { password } = req.body;
+  const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  
+  if (password === adminPassword) {
+    const session = req.session as any;
+    session.isAdmin = true;
+    res.redirect('/admin');
+  } else {
+    res.redirect('/admin/login?error=1');
+  }
 });
 
 // Main admin panel
@@ -347,12 +352,9 @@ router.post('/reviews', requireAdmin, async (req, res) => {
 
 // Logout
 router.get('/logout', (req, res) => {
-  res.send(`
-    <script>
-      localStorage.removeItem('adminId');
-      window.location.href = '/admin/login';
-    </script>
-  `);
+  const session = req.session as any;
+  session.isAdmin = false;
+  res.redirect('/admin/login');
 });
 
 export { router as adminWebRouter };

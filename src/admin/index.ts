@@ -141,6 +141,7 @@ export async function setupAdminPanel(app: Application) {
     },
     null,
     {
+      secret: env.botWebhookSecret ?? env.adminPassword,
       resave: false,
       saveUninitialized: false,
     },
