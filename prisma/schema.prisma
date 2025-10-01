@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PartnerProgramType {
+  DIRECT
+  MULTI_LEVEL
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+model User {
+  id            Int             @id @default(autoincrement())
+  telegramId    String          @unique
+  firstName     String?
+  lastName      String?
+  username      String?
+  languageCode  String?
+  phone         String?
+  cartItems     CartItem[]
+  histories     UserHistory[]
+  partner       PartnerProfile?
+  orders        OrderRequest[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model UserHistory {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  action    String
+  payload   Json?
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id          Int        @id @default(autoincrement())
+  name        String
+  slug        String     @unique
+  description String?
+  isActive    Boolean    @default(true)
+  products    Product[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Product {
+  id               Int        @id @default(autoincrement())
+  title            String
+  summary          String
+  description      String?
+  imageUrl         String?
+  price            Decimal     @db.Decimal(12, 2)
+  isActive         Boolean     @default(true)
+  category         Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId       Int
+  cartItems        CartItem[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model CartItem {
+  id        Int     @id @default(autoincrement())
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId Int
+  quantity  Int     @default(1)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model OrderRequest {
+  id          Int      @id @default(autoincrement())
+  user        User?    @relation(fields: [userId], references: [id])
+  userId      Int?
+  contact     String?
+  message     String
+  itemsJson   Json
+  status      String   @default("NEW")
+  createdAt   DateTime @default(now())
+}
+
+model PartnerProfile {
+  id             Int                 @id @default(autoincrement())
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         Int                 @unique
+  programType    PartnerProgramType
+  referralCode   String              @unique
+  balance        Decimal             @default(0) @db.Decimal(12, 2)
+  bonus          Decimal             @default(0) @db.Decimal(12, 2)
+  totalPartners  Int                 @default(0)
+  directPartners Int                 @default(0)
+  multiPartners  Int                 @default(0)
+  referrals      PartnerReferral[]
+  transactions   PartnerTransaction[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model PartnerReferral {
+  id          Int              @id @default(autoincrement())
+  profile     PartnerProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId   Int
+  referredId  Int?
+  contact     String?
+  level       Int
+  createdAt   DateTime          @default(now())
+}
+
+model PartnerTransaction {
+  id          Int               @id @default(autoincrement())
+  profile     PartnerProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profileId   Int
+  amount      Decimal           @db.Decimal(12, 2)
+  type        TransactionType
+  description String
+  createdAt   DateTime          @default(now())
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  name      String
+  photoUrl  String?
+  content   String
+  link      String?
+  isPinned  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
