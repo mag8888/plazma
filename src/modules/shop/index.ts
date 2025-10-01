@@ -156,7 +156,7 @@ async function handleBuy(ctx: Context, productId: string) {
 
 export const shopModule: BotModule = {
   async register(bot: Telegraf<Context>) {
-    bot.hears(['Магазин', 'Каталог'], async (ctx) => {
+    bot.hears(['Магазин', 'Каталог', '🛒 Магазин'], async (ctx) => {
       await showCategories(ctx);
     });
 

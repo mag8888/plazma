@@ -31,7 +31,7 @@ const aboutText = `👋 Добро пожаловать в Plazma Water
 
 export const aboutModule: BotModule = {
   async register(bot: Telegraf<Context>) {
-    bot.hears(/о\s*нас/i, async (ctx) => {
+        bot.hears([/о\s*нас/i, 'ℹ️ О нас'], async (ctx) => {
       await logUserAction(ctx, 'menu:about');
       await ctx.reply(aboutText);
     });

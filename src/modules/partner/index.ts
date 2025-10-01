@@ -224,7 +224,7 @@ async function showMultiInvite(ctx: Context) {
 
 export const partnerModule: BotModule = {
   async register(bot: Telegraf<Context>) {
-    bot.hears(['Партнёрка', 'Партнерка'], async (ctx) => {
+    bot.hears(['Партнёрка', 'Партнерка', '💰 Партнёрка'], async (ctx) => {
       await logUserAction(ctx, 'menu:partners');
       await ctx.reply(programIntro, planKeyboard());
     });

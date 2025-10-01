@@ -28,8 +28,8 @@ const introDetails = `✨ Plazma Water — это источник энерги�
 
 export function mainKeyboard() {
   return Markup.keyboard([
-    ['Магазин', 'Партнёрка'],
-    ['Отзывы', 'О нас'],
+    ['🛒 Магазин', '💰 Партнёрка'],
+    ['⭐ Отзывы', 'ℹ️ О нас'],
   ]).resize();
 }
 
@@ -112,7 +112,7 @@ export const navigationModule: BotModule = {
     });
 
 
-    bot.hears(['Меню', 'Главное меню', 'Назад'], async (ctx) => {
+    bot.hears(['Меню', 'Главное меню', 'Назад', '🛒 Магазин', '💰 Партнёрка', '⭐ Отзывы', 'ℹ️ О нас'], async (ctx) => {
       await logUserAction(ctx, 'menu:main');
       await ctx.reply(greeting, mainKeyboard());
       
