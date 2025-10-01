@@ -164,7 +164,7 @@ router.get('/', requireAdmin, async (req, res) => {
                 </div>
                 <div class="form-group">
                   <label>Слаг (URL):</label>
-                  <input type="text" name="slug" required>
+                  <input type="text" name="slug">
                 </div>
                 <div class="form-group">
                   <label>Описание:</label>
@@ -271,8 +271,20 @@ router.get('/', requireAdmin, async (req, res) => {
 router.post('/categories', requireAdmin, async (req, res) => {
   try {
     const { name, slug, description } = req.body;
+    
+    // Generate slug from name if not provided
+    let finalSlug = slug;
+    if (!finalSlug && name) {
+      finalSlug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .trim();
+    }
+    
     await prisma.category.create({
-      data: { name, slug, description, isActive: true }
+      data: { name, slug: finalSlug || name.toLowerCase(), description, isActive: true }
     });
     res.redirect('/admin?success=category');
   } catch (error) {
