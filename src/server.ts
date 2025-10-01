@@ -12,71 +12,58 @@ import { setupAdminPanel } from './admin/index.js';
 import { adminWebRouter } from './admin/web.js';
 
 async function bootstrap() {
-  await prisma.$connect();
-  await ensureInitialData();
+  try {
+    await prisma.$connect();
+    console.log('Database connected');
+    
+    await ensureInitialData();
+    console.log('Initial data ensured');
 
-  const bot = new Telegraf<Context>(env.botToken, {
-    handlerTimeout: 30_000,
-  });
+    const app = express();
+    app.use(express.json());
 
-  bot.use(session<SessionData, Context>({ defaultSession: (): SessionData => ({}) }));
-  await applyBotModules(bot);
+    // Web admin panel
+    app.use('/admin', adminWebRouter);
 
-  const app = express();
-  app.use(express.json());
+    const port = Number(process.env.PORT ?? 3000);
+    app.get('/health', (_req, res) => {
+      res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    });
 
-  // Web admin panel
-  app.use('/admin', adminWebRouter);
+    app.listen(port, () => {
+      console.log(`Server is running on port ${port}`);
+    });
 
-  // await setupAdminPanel(app); // Disabled for MongoDB compatibility
+    // Initialize bot separately
+    const bot = new Telegraf<Context>(env.botToken, {
+      handlerTimeout: 30_000,
+    });
 
-  // Force long polling for now to ensure bot works
-  console.log('Starting bot in long polling mode...');
-  
-  // Wait a bit to avoid conflicts
-  await new Promise(resolve => setTimeout(resolve, 5000));
-  
-  // Start web server first, then try to launch bot
-  const port = Number(process.env.PORT ?? 3000);
-  app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
+    bot.use(session<SessionData, Context>({ defaultSession: (): SessionData => ({}) }));
+    await applyBotModules(bot);
 
-  app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-  });
-
-  // Retry bot launch with error handling (non-blocking)
-  let retries = 3;
-  const launchBot = async () => {
-    while (retries > 0) {
-      try {
-        await bot.launch();
-        console.log('Bot launched in long polling mode');
-        break;
-      } catch (error) {
-        console.warn(`Bot launch failed, retries left: ${retries - 1}`, error);
-        retries--;
-        if (retries > 0) {
-          await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
-        } else {
-          console.error('Failed to launch bot after all retries - web server still running');
-          // Don't throw error - let web server continue running
-        }
-      }
+    console.log('Starting bot in long polling mode...');
+    
+    // Try to launch bot with error handling
+    try {
+      await bot.launch();
+      console.log('Bot launched successfully');
+    } catch (error) {
+      console.error('Bot launch failed, but web server is running:', error);
     }
-  };
 
-  // Launch bot asynchronously without blocking web server
-  launchBot().catch(console.error);
+    process.once('SIGINT', () => {
+      void bot.stop('SIGINT');
+    });
 
-  process.once('SIGINT', () => {
-    void bot.stop('SIGINT');
-  });
+    process.once('SIGTERM', () => {
+      void bot.stop('SIGTERM');
+    });
 
-  process.once('SIGTERM', () => {
-    void bot.stop('SIGTERM');
-  });
+  } catch (error) {
+    console.error('Bootstrap error:', error);
+    process.exit(1);
+  }
 }
 
 bootstrap().catch((error) => {
