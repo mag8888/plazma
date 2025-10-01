@@ -13,29 +13,45 @@ export async function ensureUser(ctx: Context) {
     languageCode: from.language_code ?? null,
   } as const;
 
-  const user = await prisma.user.upsert({
-    where: { telegramId: data.telegramId },
-    update: {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      username: data.username,
-      languageCode: data.languageCode,
-    },
-    create: data,
-  });
+  try {
+    const user = await prisma.user.upsert({
+      where: { telegramId: data.telegramId },
+      update: {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        username: data.username,
+        languageCode: data.languageCode,
+      },
+      create: data,
+    });
 
-  return user;
+    return user;
+  } catch (error) {
+    console.warn('Failed to ensure user:', error);
+    // Return mock user object to continue without DB
+    return {
+      id: data.telegramId,
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
 }
 
 export async function logUserAction(ctx: Context, action: string, payload?: any) {
-  const user = await ensureUser(ctx);
-  if (!user) return;
+  try {
+    const user = await ensureUser(ctx);
+    if (!user) return;
 
-  await prisma.userHistory.create({
-    data: {
-      userId: user.id,
-      action,
-      payload: payload ?? undefined,
-    },
-  });
+    await prisma.userHistory.create({
+      data: {
+        userId: user.id,
+        action,
+        payload: payload ?? undefined,
+      },
+    });
+  } catch (error) {
+    console.warn('Failed to log user action:', error);
+    // Continue without logging if DB fails
+  }
 }
