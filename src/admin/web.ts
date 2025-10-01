@@ -10,8 +10,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET || '3tqNb1QPMICBTW0bTLus5HFHGQI',
 });
 
-// Configure multer for file uploads
-const upload = multer({ dest: 'uploads/' });
+// Configure multer for file uploads (use memory storage for Railway)
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 
@@ -285,12 +285,22 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
     // Upload image to Cloudinary if provided
     if (req.file) {
       console.log('Uploading image to Cloudinary...');
-      const result = await cloudinary.uploader.upload(req.file.path, {
-        folder: 'plazma-bot/products',
-        transformation: [
-          { width: 800, height: 600, crop: 'fill', quality: 'auto' }
-        ]
+      const result = await new Promise<any>((resolve, reject) => {
+        cloudinary.uploader.upload_stream({
+          folder: 'plazma-bot/products',
+          transformation: [
+            { width: 800, height: 600, crop: 'fill', quality: 'auto' }
+          ]
+        }, (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }).end(req.file!.buffer);
       });
+      
       imageUrl = result.secure_url;
       console.log('Image uploaded:', imageUrl);
     }
