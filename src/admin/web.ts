@@ -271,6 +271,7 @@ router.get('/', requireAdmin, async (req, res) => {
 router.post('/categories', requireAdmin, async (req, res) => {
   try {
     const { name, slug, description } = req.body;
+    console.log('Creating category with data:', { name, slug, description });
 
     // Generate slug from name if not provided
     let finalSlug = slug;
@@ -283,12 +284,17 @@ router.post('/categories', requireAdmin, async (req, res) => {
         .trim();
     }
 
-    await prisma.category.create({
+    console.log('Final slug:', finalSlug);
+
+    const category = await prisma.category.create({
       data: { name, slug: finalSlug || name.toLowerCase(), description, isActive: true }
     });
+
+    console.log('Category created successfully:', category.id);
     res.redirect('/admin?success=category');
   } catch (error) {
     console.error('Category creation error:', error);
+    console.error('Error details:', error instanceof Error ? error.message : String(error));
     res.redirect('/admin?error=category');
   }
 });
