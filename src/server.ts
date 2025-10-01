@@ -9,6 +9,7 @@ import { applyBotModules } from './bot/setup-modules.js';
 import { prisma } from './lib/prisma.js';
 import { ensureInitialData } from './lib/bootstrap.js';
 import { setupAdminPanel } from './admin/index.js';
+import { adminWebRouter } from './admin/web.js';
 
 async function bootstrap() {
   await prisma.$connect();
@@ -23,6 +24,9 @@ async function bootstrap() {
 
   const app = express();
   app.use(express.json());
+
+  // Web admin panel
+  app.use('/admin', adminWebRouter);
 
   // await setupAdminPanel(app); // Disabled for MongoDB compatibility
 
