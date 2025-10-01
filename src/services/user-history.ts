@@ -1,6 +1,12 @@
 import { Context } from '../bot/context.js';
 import { prisma } from '../lib/prisma.js';
 
+function generateObjectId(telegramId: number): string {
+  // Convert Telegram ID to a valid MongoDB ObjectId (24 hex chars)
+  const hex = telegramId.toString(16).padStart(24, '0');
+  return hex.substring(0, 24);
+}
+
 export async function ensureUser(ctx: Context) {
   const from = ctx.from;
   if (!from) return null;
@@ -22,7 +28,10 @@ export async function ensureUser(ctx: Context) {
         username: data.username,
         languageCode: data.languageCode,
       },
-      create: data,
+      create: {
+        ...data,
+        id: generateObjectId(from.id),
+      },
     });
 
     return user;
@@ -30,7 +39,7 @@ export async function ensureUser(ctx: Context) {
     console.warn('Failed to ensure user:', error);
     // Return mock user object to continue without DB
     return {
-      id: data.telegramId,
+      id: generateObjectId(from.id),
       ...data,
       createdAt: new Date(),
       updatedAt: new Date(),
