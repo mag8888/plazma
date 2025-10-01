@@ -2,7 +2,7 @@ import { Telegraf, Markup } from 'telegraf';
 import { Context } from '../../bot/context.js';
 import { BotModule } from '../../bot/types.js';
 import { logUserAction } from '../../services/user-history.js';
-import { createPartnerReferral } from '../../services/partner-service.js';
+import { createPartnerReferral, recordPartnerTransaction } from '../../services/partner-service.js';
 
 const greeting = `👋 Добро пожаловать!
 Plazma Water — жидкие витамины и минералы в наноформе.
@@ -56,13 +56,31 @@ export const navigationModule: BotModule = {
             // Create referral record
             await createPartnerReferral(partnerProfile.id, 1, ctx.from?.id?.toString());
             
+            // Award 3PZ to the inviter
+            await recordPartnerTransaction(
+              partnerProfile.id, 
+              3, 
+              'Бонус за приглашение друга', 
+              'CREDIT'
+            );
+            
+            // Send notification to inviter
+            try {
+              await ctx.telegram.sendMessage(
+                partnerProfile.user.telegramId,
+                '🎉 Ваш счет пополнен на 3PZ, приглашайте больше друзей и получайте продукцию за бонусы!'
+              );
+            } catch (error) {
+              console.warn('Failed to send notification to inviter:', error);
+            }
+            
             const programText = programType === 'DIRECT' 
               ? 'прямой программе (25% с покупок)'
               : 'многоуровневой программе (15% + 5% + 5%)';
               
             const bonusText = `\n\n💡 Условия бонуса:
 • Ваш бонус 10%
-• Бонус ${programType === 'DIRECT' ? '25%' : '15%+5%+5%'} начнет действовать при Вашей активности $200 в месяц`;
+• Бонус ${programType === 'DIRECT' ? '25%' : '15%+5%+5%'} начнет действовать при Вашей активности 200PZ в месяц`;
               
             await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!${bonusText}`);
             await logUserAction(ctx, 'partner:referral_joined', { 
