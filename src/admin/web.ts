@@ -362,6 +362,277 @@ router.post('/reviews', requireAdmin, async (req, res) => {
   }
 });
 
+// Individual admin pages
+router.get('/categories', requireAdmin, async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление категориями</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>📁 Управление категориями</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        <table>
+          <tr><th>ID</th><th>Название</th><th>Слаг</th><th>Статус</th><th>Создана</th></tr>
+    `;
+
+    categories.forEach(cat => {
+      html += `
+        <tr>
+          <td>${cat.id.substring(0, 8)}...</td>
+          <td>${cat.name}</td>
+          <td>${cat.slug}</td>
+          <td>${cat.isActive ? '✅ Активна' : '❌ Неактивна'}</td>
+          <td>${new Date(cat.createdAt).toLocaleDateString()}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Categories page error:', error);
+    res.status(500).send('Ошибка загрузки категорий');
+  }
+});
+
+router.get('/partners', requireAdmin, async (req, res) => {
+  try {
+    const partners = await prisma.partnerProfile.findMany({
+      include: { user: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление партнёрами</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>👥 Управление партнёрами</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        <table>
+          <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Партнёров</th><th>Код</th><th>Создан</th></tr>
+    `;
+
+    partners.forEach(partner => {
+      html += `
+        <tr>
+          <td>${partner.user.firstName || 'Не указан'}</td>
+          <td>${partner.programType === 'DIRECT' ? 'Прямая (25%)' : 'Многоуровневая (15%+5%+5%)'}</td>
+          <td>${partner.balance} PZ</td>
+          <td>${partner.totalPartners}</td>
+          <td>${partner.referralCode}</td>
+          <td>${new Date(partner.createdAt).toLocaleDateString()}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Partners page error:', error);
+    res.status(500).send('Ошибка загрузки партнёров');
+  }
+});
+
+router.get('/products', requireAdmin, async (req, res) => {
+  try {
+    const products = await prisma.product.findMany({
+      include: { category: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление товарами</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>🛍 Управление товарами</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        <table>
+          <tr><th>Название</th><th>Цена</th><th>Категория</th><th>Статус</th><th>Создан</th></tr>
+    `;
+
+    products.forEach(product => {
+      html += `
+        <tr>
+          <td>${product.title}</td>
+          <td>${product.price} PZ</td>
+          <td>${product.category.name}</td>
+          <td>${product.isActive ? '✅ Активен' : '❌ Неактивен'}</td>
+          <td>${new Date(product.createdAt).toLocaleDateString()}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Products page error:', error);
+    res.status(500).send('Ошибка загрузки товаров');
+  }
+});
+
+router.get('/reviews', requireAdmin, async (req, res) => {
+  try {
+    const reviews = await prisma.review.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление отзывами</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>⭐ Управление отзывами</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        <table>
+          <tr><th>Имя</th><th>Статус</th><th>Закреплён</th><th>Текст</th><th>Создан</th></tr>
+    `;
+
+    reviews.forEach(review => {
+      html += `
+        <tr>
+          <td>${review.name}</td>
+          <td>${review.isActive ? '✅ Активен' : '❌ Неактивен'}</td>
+          <td>${review.isPinned ? '📌 Да' : '❌ Нет'}</td>
+          <td>${review.content.substring(0, 100)}${review.content.length > 100 ? '...' : ''}</td>
+          <td>${new Date(review.createdAt).toLocaleDateString()}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Reviews page error:', error);
+    res.status(500).send('Ошибка загрузки отзывов');
+  }
+});
+
+router.get('/orders', requireAdmin, async (req, res) => {
+  try {
+    const orders = await prisma.orderRequest.findMany({
+      include: { user: true },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление заказами</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>📦 Управление заказами</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        <table>
+          <tr><th>ID</th><th>Пользователь</th><th>Статус</th><th>Контакт</th><th>Сообщение</th><th>Создан</th></tr>
+    `;
+
+    orders.forEach(order => {
+      html += `
+        <tr>
+          <td>${order.id.substring(0, 8)}...</td>
+          <td>${order.user?.firstName || 'Не указан'}</td>
+          <td>${order.status}</td>
+          <td>${order.contact || 'Не указан'}</td>
+          <td>${order.message.substring(0, 50)}${order.message.length > 50 ? '...' : ''}</td>
+          <td>${new Date(order.createdAt).toLocaleDateString()}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Orders page error:', error);
+    res.status(500).send('Ошибка загрузки заказов');
+  }
+});
+
 // Logout
 router.get('/logout', (req, res) => {
   const session = req.session as any;
