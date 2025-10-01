@@ -1,4 +1,4 @@
-import { PartnerProgramType, Prisma, TransactionType } from '@prisma/client';
+import { PartnerProgramType, TransactionType } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../config/env.js';

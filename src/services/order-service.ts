@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 
 interface OrderItemPayload {
@@ -17,7 +16,7 @@ export async function createOrderRequest(params: {
   const itemsJson = params.items.map((item) => ({
     ...item,
     price: Number(item.price),
-  })) as unknown as Prisma.JsonArray;
+  }));
 
   return prisma.orderRequest.create({
     data: {

@@ -1,5 +1,4 @@
 import { prisma } from '../lib/prisma.js';
-import { Prisma } from '@prisma/client';
 
 export async function getCartItems(userId: string) {
   return prisma.cartItem.findMany({

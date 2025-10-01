@@ -1,4 +1,3 @@
-import type { Prisma } from '@prisma/client';
 import { Context } from '../bot/context.js';
 import { prisma } from '../lib/prisma.js';
 
