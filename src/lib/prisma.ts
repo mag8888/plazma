@@ -8,6 +8,14 @@ if (dbUrl) {
   console.error('DATABASE_URL not found in environment variables');
 }
 
+// Fix MongoDB connection string for Railway
+const fixedDbUrl = dbUrl ? dbUrl.replace('retrywrites=true', 'retryWrites=true') : undefined;
+
 export const prisma = new PrismaClient({
+  datasources: fixedDbUrl ? {
+    db: {
+      url: fixedDbUrl
+    }
+  } : undefined,
   log: ['query', 'info', 'warn', 'error'],
 });
