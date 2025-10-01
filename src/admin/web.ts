@@ -5,9 +5,9 @@ import { prisma } from '../lib/prisma.js';
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dt4r1tigf',
+  api_key: process.env.CLOUDINARY_API_KEY || '579625698851834',
+  api_secret: process.env.CLOUDINARY_API_SECRET || '3tqNb1QPMICBTW0bTLus5HFHGQI',
 });
 
 // Configure multer for file uploads
@@ -284,11 +284,18 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
 
     // Upload image to Cloudinary if provided
     if (req.file) {
-      const result = await cloudinary.uploader.upload(req.file.path);
+      console.log('Uploading image to Cloudinary...');
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'plazma-bot/products',
+        transformation: [
+          { width: 800, height: 600, crop: 'fill', quality: 'auto' }
+        ]
+      });
       imageUrl = result.secure_url;
+      console.log('Image uploaded:', imageUrl);
     }
 
-    await prisma.product.create({
+    const product = await prisma.product.create({
       data: {
         title,
         summary,
@@ -300,6 +307,7 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
       }
     });
 
+    console.log('Product created:', product.id);
     res.redirect('/admin?success=product');
   } catch (error) {
     console.error('Product creation error:', error);
