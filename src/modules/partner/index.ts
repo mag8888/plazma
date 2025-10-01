@@ -45,6 +45,10 @@ ${params.transactions.length ? `	•	📊 История начислений: [
 const directPlanText = `(на кнопку 25%) Прямая комиссия — 25%
 Делитесь ссылкой → получаете 25% от всех покупок друзей.
 
+💡 Условия бонуса:
+• Ваш бонус 10%
+• Бонус 25% начнет действовать при Вашей активности $200 в месяц
+
 📲 Выбирайте удобный формат и начинайте зарабатывать уже сегодня!`;
 
 const multiPlanText = `(на кнопку 15% + 5% + 5%) Многоуровневая система — 15% + 5% + 5%
@@ -52,20 +56,24 @@ const multiPlanText = `(на кнопку 15% + 5% + 5%) Многоуровне�
 	•	5% с покупок их друзей (2-й уровень)
 	•	5% с покупок следующего уровня (3-й уровень)
 
+💡 Условия бонуса:
+• Ваш бонус 10%
+• Бонус 15%+5%+5% начнет действовать при Вашей активности $200 в месяц
+
 📲 Выбирайте удобный формат и начинайте зарабатывать уже сегодня!`;
 
 function planKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback('Карточка клиента', DASHBOARD_ACTION)],
-    [Markup.button.callback('25%', DIRECT_PLAN_ACTION), Markup.button.callback('15% + 5% + 5%', MULTI_PLAN_ACTION)],
+    [Markup.button.callback('📊 Карточка клиента', DASHBOARD_ACTION)],
+    [Markup.button.callback('💰 25%', DIRECT_PLAN_ACTION), Markup.button.callback('📈 15% + 5% + 5%', MULTI_PLAN_ACTION)],
   ]);
 }
 
 function partnerActionsKeyboard() {
   return Markup.inlineKeyboard([
-    [Markup.button.callback('Мои партнёры', PARTNERS_ACTION), Markup.button.callback('Пригласить друга', INVITE_ACTION)],
-    [Markup.button.callback('Ссылка 25%', INVITE_DIRECT_ACTION), Markup.button.callback('Ссылка 15%+5%+5%', INVITE_MULTI_ACTION)],
-    [Markup.button.callback('Партнёры: 1-й', PARTNERS_LEVEL_1_ACTION), Markup.button.callback('Партнёры: 2-й', PARTNERS_LEVEL_2_ACTION), Markup.button.callback('Партнёры: 3-й', PARTNERS_LEVEL_3_ACTION)],
+    [Markup.button.callback('👥 Мои партнёры', PARTNERS_ACTION), Markup.button.callback('📤 Пригласить друга', INVITE_ACTION)],
+    [Markup.button.callback('🔗 Ссылка 25%', INVITE_DIRECT_ACTION), Markup.button.callback('🔗 Ссылка 15%+5%+5%', INVITE_MULTI_ACTION)],
+    [Markup.button.callback('👤 Партнёры: 1-й', PARTNERS_LEVEL_1_ACTION), Markup.button.callback('👥 Партнёры: 2-й', PARTNERS_LEVEL_2_ACTION), Markup.button.callback('👨‍👩‍👧‍👦 Партнёры: 3-й', PARTNERS_LEVEL_3_ACTION)],
   ]);
 }
 

@@ -60,7 +60,11 @@ export const navigationModule: BotModule = {
               ? 'прямой программе (25% с покупок)'
               : 'многоуровневой программе (15% + 5% + 5%)';
               
-            await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!`);
+            const bonusText = `\n\n💡 Условия бонуса:
+• Ваш бонус 10%
+• Бонус ${programType === 'DIRECT' ? '25%' : '15%+5%+5%'} начнет действовать при Вашей активности $200 в месяц`;
+              
+            await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!${bonusText}`);
             await logUserAction(ctx, 'partner:referral_joined', { 
               referralCode, 
               partnerId: partnerProfile.id,
@@ -80,7 +84,7 @@ export const navigationModule: BotModule = {
           inline_keyboard: [
             [
               {
-                text: 'Подробнее',
+                text: '📖 Подробнее',
                 callback_data: 'nav:more',
               },
             ],
@@ -100,7 +104,7 @@ export const navigationModule: BotModule = {
           inline_keyboard: [
             [
               {
-                text: 'Подробнее',
+                text: '📖 Подробнее',
                 callback_data: 'nav:more',
               },
             ],
