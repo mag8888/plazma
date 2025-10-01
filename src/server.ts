@@ -24,7 +24,7 @@ async function bootstrap() {
   const app = express();
   app.use(express.json());
 
-  await setupAdminPanel(app);
+  // await setupAdminPanel(app); // Disabled for MongoDB compatibility
 
   if (env.botWebhookUrl) {
     const secretToken = env.botWebhookSecret;
