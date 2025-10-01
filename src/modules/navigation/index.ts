@@ -2,6 +2,7 @@ import { Telegraf, Markup } from 'telegraf';
 import { Context } from '../../bot/context.js';
 import { BotModule } from '../../bot/types.js';
 import { logUserAction } from '../../services/user-history.js';
+import { createPartnerReferral } from '../../services/partner-service.js';
 
 const greeting = `👋 Добро пожаловать!
 Plazma Water — жидкие витамины и минералы в наноформе.
@@ -36,6 +37,31 @@ export const navigationModule: BotModule = {
   async register(bot: Telegraf<Context>) {
     bot.start(async (ctx) => {
       await logUserAction(ctx, 'command:start');
+      
+      // Check if user came from referral link
+      const startPayload = ctx.startPayload;
+      if (startPayload && startPayload.startsWith('ref_')) {
+        const referralCode = startPayload.replace('ref_', '');
+        try {
+          // Find partner profile by referral code
+          const { prisma } = await import('../../lib/prisma.js');
+          const partnerProfile = await prisma.partnerProfile.findUnique({
+            where: { referralCode },
+            include: { user: true }
+          });
+          
+          if (partnerProfile) {
+            // Create referral record
+            await createPartnerReferral(partnerProfile.id, 1, ctx.from?.id?.toString());
+            
+            await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'}!`);
+            await logUserAction(ctx, 'partner:referral_joined', { referralCode, partnerId: partnerProfile.id });
+          }
+        } catch (error) {
+          console.error('Error processing referral:', error);
+        }
+      }
+      
       await ctx.reply(greeting, mainKeyboard());
       await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.', {
         reply_markup: {

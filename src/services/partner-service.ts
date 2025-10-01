@@ -38,8 +38,8 @@ export async function getOrCreatePartnerProfile(userId: string, programType: Par
 }
 
 export function buildReferralLink(code: string) {
-  const base = env.publicBaseUrl.replace(/\/$/, '');
-  return `${base}/?ref=${code}`;
+  // Create Telegram bot link with referral parameter
+  return `https://t.me/PlazmaWaterBot?start=ref_${code}`;
 }
 
 export async function getPartnerDashboard(userId: string) {
