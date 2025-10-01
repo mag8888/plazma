@@ -271,7 +271,7 @@ router.get('/', requireAdmin, async (req, res) => {
 router.post('/categories', requireAdmin, async (req, res) => {
   try {
     const { name, slug, description } = req.body;
-    
+
     // Generate slug from name if not provided
     let finalSlug = slug;
     if (!finalSlug && name) {
@@ -282,7 +282,7 @@ router.post('/categories', requireAdmin, async (req, res) => {
         .replace(/-+/g, '-') // Replace multiple hyphens with single
         .trim();
     }
-    
+
     await prisma.category.create({
       data: { name, slug: finalSlug || name.toLowerCase(), description, isActive: true }
     });
@@ -290,6 +290,173 @@ router.post('/categories', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Category creation error:', error);
     res.redirect('/admin?error=category');
+  }
+});
+
+// Handle category toggle active status
+router.post('/categories/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const category = await prisma.category.findUnique({ where: { id } });
+    
+    if (!category) {
+      return res.redirect('/admin?error=category_not_found');
+    }
+
+    await prisma.category.update({
+      where: { id },
+      data: { isActive: !category.isActive }
+    });
+
+    res.redirect('/admin?success=category_updated');
+  } catch (error) {
+    console.error('Category toggle error:', error);
+    res.redirect('/admin?error=category_toggle');
+  }
+});
+
+// Handle category deletion
+router.post('/categories/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if category has products
+    const productCount = await prisma.product.count({ where: { categoryId: id } });
+    if (productCount > 0) {
+      return res.redirect('/admin?error=category_has_products');
+    }
+
+    await prisma.category.delete({ where: { id } });
+    res.redirect('/admin?success=category_deleted');
+  } catch (error) {
+    console.error('Category deletion error:', error);
+    res.redirect('/admin?error=category_delete');
+  }
+});
+
+// Handle product toggle active status
+router.post('/products/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      return res.redirect('/admin?error=product_not_found');
+    }
+
+    await prisma.product.update({
+      where: { id },
+      data: { isActive: !product.isActive }
+    });
+
+    res.redirect('/admin?success=product_updated');
+  } catch (error) {
+    console.error('Product toggle error:', error);
+    res.redirect('/admin?error=product_toggle');
+  }
+});
+
+// Handle product deletion
+router.post('/products/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Remove from all carts first
+    await prisma.cartItem.deleteMany({ where: { productId: id } });
+    
+    await prisma.product.delete({ where: { id } });
+    res.redirect('/admin?success=product_deleted');
+  } catch (error) {
+    console.error('Product deletion error:', error);
+    res.redirect('/admin?error=product_delete');
+  }
+});
+
+// Handle review toggle active status
+router.post('/reviews/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const review = await prisma.review.findUnique({ where: { id } });
+    
+    if (!review) {
+      return res.redirect('/admin?error=review_not_found');
+    }
+
+    await prisma.review.update({
+      where: { id },
+      data: { isActive: !review.isActive }
+    });
+
+    res.redirect('/admin?success=review_updated');
+  } catch (error) {
+    console.error('Review toggle error:', error);
+    res.redirect('/admin?error=review_toggle');
+  }
+});
+
+// Handle review toggle pinned status
+router.post('/reviews/:id/toggle-pinned', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const review = await prisma.review.findUnique({ where: { id } });
+    
+    if (!review) {
+      return res.redirect('/admin?error=review_not_found');
+    }
+
+    await prisma.review.update({
+      where: { id },
+      data: { isPinned: !review.isPinned }
+    });
+
+    res.redirect('/admin?success=review_updated');
+  } catch (error) {
+    console.error('Review toggle pinned error:', error);
+    res.redirect('/admin?error=review_toggle');
+  }
+});
+
+// Handle review deletion
+router.post('/reviews/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.review.delete({ where: { id } });
+    res.redirect('/admin?success=review_deleted');
+  } catch (error) {
+    console.error('Review deletion error:', error);
+    res.redirect('/admin?error=review_delete');
+  }
+});
+
+// Handle order status update
+router.post('/orders/:id/update-status', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    await prisma.orderRequest.update({
+      where: { id },
+      data: { status }
+    });
+
+    res.redirect('/admin?success=order_updated');
+  } catch (error) {
+    console.error('Order status update error:', error);
+    res.redirect('/admin?error=order_update');
+  }
+});
+
+// Handle order deletion
+router.post('/orders/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.orderRequest.delete({ where: { id } });
+    res.redirect('/admin?success=order_deleted');
+  } catch (error) {
+    console.error('Order deletion error:', error);
+    res.redirect('/admin?error=order_delete');
   }
 });
 
