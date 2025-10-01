@@ -28,6 +28,10 @@ async function bootstrap() {
 
   // Force long polling for now to ensure bot works
   console.log('Starting bot in long polling mode...');
+  
+  // Wait a bit to avoid conflicts
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  
   await bot.launch();
   console.log('Bot launched in long polling mode');
 
