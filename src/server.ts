@@ -32,8 +32,24 @@ async function bootstrap() {
   // Wait a bit to avoid conflicts
   await new Promise(resolve => setTimeout(resolve, 5000));
   
-  await bot.launch();
-  console.log('Bot launched in long polling mode');
+  // Retry bot launch with error handling
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      await bot.launch();
+      console.log('Bot launched in long polling mode');
+      break;
+    } catch (error) {
+      console.warn(`Bot launch failed, retries left: ${retries - 1}`, error);
+      retries--;
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+      } else {
+        console.error('Failed to launch bot after all retries');
+        throw error;
+      }
+    }
+  }
 
   const port = Number(process.env.PORT ?? 3000);
   app.get('/health', (_req, res) => {
