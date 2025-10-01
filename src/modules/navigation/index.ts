@@ -73,7 +73,10 @@ export const navigationModule: BotModule = {
       }
       
       await ctx.reply(greeting, mainKeyboard());
-      await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.', {
+      
+      // Send welcome video
+      await ctx.replyWithVideo('https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4', {
+        caption: '✨ Plazma Water — это источник энергии нового поколения.',
         reply_markup: {
           inline_keyboard: [
             [
@@ -91,6 +94,21 @@ export const navigationModule: BotModule = {
     bot.hears(['Меню', 'Главное меню', 'Назад'], async (ctx) => {
       await logUserAction(ctx, 'menu:main');
       await ctx.reply(greeting, mainKeyboard());
+      
+      // Send welcome video
+      await ctx.replyWithVideo('https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4', {
+        caption: '✨ Plazma Water — это источник энергии нового поколения.',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'Подробнее',
+                callback_data: 'nav:more',
+              },
+            ],
+          ],
+        },
+      });
     });
 
     bot.action('nav:more', async (ctx) => {
