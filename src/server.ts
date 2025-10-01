@@ -26,20 +26,10 @@ async function bootstrap() {
 
   // await setupAdminPanel(app); // Disabled for MongoDB compatibility
 
-  if (env.botWebhookUrl) {
-    const secretToken = env.botWebhookSecret;
-    if (!secretToken) {
-      console.warn('BOT_WEBHOOK_SECRET is not set – webhook requests will not be verified.');
-    }
-
-    const webhookPath = '/bot/webhook';
-    app.use(webhookPath, bot.webhookCallback(webhookPath, secretToken ? { secretToken } : undefined));
-    await bot.telegram.setWebhook(env.botWebhookUrl, secretToken ? { secret_token: secretToken } : {});
-    console.log(`Webhook set to ${env.botWebhookUrl}`);
-  } else {
-    await bot.launch();
-    console.log('Bot launched in long polling mode');
-  }
+  // Force long polling for now to ensure bot works
+  console.log('Starting bot in long polling mode...');
+  await bot.launch();
+  console.log('Bot launched in long polling mode');
 
   const port = Number(process.env.PORT ?? 3000);
   app.get('/health', (_req, res) => {
