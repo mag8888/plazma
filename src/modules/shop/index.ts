@@ -28,8 +28,9 @@ async function showCategories(ctx: Context) {
 }
 
 function formatProductMessage(product: { title: string; summary: string; price: unknown }) {
-  const price = Number(product.price);
-  return `💧 ${product.title}\n${product.summary}\n\nЦена: ${price.toFixed(2)} ₽`;
+  const pzPrice = Number(product.price);
+  const rubPrice = (pzPrice * 100).toFixed(2);
+  return `💧 ${product.title}\n${product.summary}\n\nЦена: ${rubPrice} ₽ / ${pzPrice} PZ`;
 }
 
 async function sendProductCards(ctx: Context, categoryId: string) {

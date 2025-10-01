@@ -39,9 +39,11 @@ export function cartItemsToText(items: Array<{ product: { title: string; price: 
   }
 
   const lines = items.map((item) => {
-    const price = Number(item.product.price);
-    const total = price * item.quantity;
-    return `• ${item.product.title} — ${item.quantity} шт. × ${price.toFixed(2)} = ${total.toFixed(2)} ₽`;
+    const pzPrice = Number(item.product.price);
+    const rubPrice = (pzPrice * 100).toFixed(2);
+    const totalRub = (pzPrice * item.quantity * 100).toFixed(2);
+    const totalPz = (pzPrice * item.quantity).toFixed(2);
+    return `• ${item.product.title} — ${item.quantity} шт. × ${rubPrice} ₽ = ${totalRub} ₽ / ${totalPz} PZ`;
   });
 
   return lines.join('\n');

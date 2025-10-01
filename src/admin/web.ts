@@ -191,9 +191,20 @@ router.get('/', requireAdmin, async (req, res) => {
                   <textarea name="description"></textarea>
                 </div>
                 <div class="form-group">
-                  <label>Цена (₽):</label>
-                  <input type="number" name="price" step="0.01" required>
+                  <label>Цена в рублях (₽):</label>
+                  <input type="number" name="price_rub" step="0.01" required placeholder="Например: 5000.00" oninput="updatePZPrice(this.value)">
                 </div>
+                <div class="form-group">
+                  <label>Цена в PZ (автоматически):</label>
+                  <input type="number" name="price" step="0.01" readonly style="background-color: #f5f5f5;">
+                  <small style="color: #666;">1 PZ = 100 ₽ (курс обмена)</small>
+                </div>
+                <script>
+                  function updatePZPrice(rubPrice) {
+                    const pzPrice = rubPrice / 100;
+                    document.querySelector('input[name="price"]').value = pzPrice.toFixed(2);
+                  }
+                </script>
                 <div class="form-group">
                   <label>Категория:</label>
                   <select name="categoryId" required>
@@ -469,7 +480,13 @@ router.post('/orders/:id/delete', requireAdmin, async (req, res) => {
 // Handle product creation
 router.post('/products', requireAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { title, summary, description, price, categoryId } = req.body;
+    const { title, summary, description, price_rub, price, categoryId } = req.body;
+    
+    // Convert RUB to PZ (1 PZ = 100 RUB)
+    const rubPrice = parseFloat(price_rub) || 0;
+    const pzPrice = rubPrice / 100;
+    
+    console.log('Creating product with RUB price:', rubPrice, 'PZ price:', pzPrice);
     let imageUrl = null;
 
     // Upload image to Cloudinary if provided
@@ -500,7 +517,7 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
         title,
         summary,
         description,
-        price: parseFloat(price),
+        price: pzPrice, // Use converted PZ price
         categoryId,
         imageUrl,
         isActive: true
@@ -670,14 +687,15 @@ router.get('/products', requireAdmin, async (req, res) => {
         <h2>🛍 Управление товарами</h2>
         <a href="/admin" class="btn">← Назад</a>
         <table>
-          <tr><th>Название</th><th>Цена</th><th>Категория</th><th>Статус</th><th>Создан</th></tr>
+                  <tr><th>Название</th><th>Цена (₽ / PZ)</th><th>Категория</th><th>Статус</th><th>Создан</th></tr>
     `;
 
     products.forEach(product => {
+      const rubPrice = (product.price * 100).toFixed(2);
       html += `
         <tr>
           <td>${product.title}</td>
-          <td>${product.price} PZ</td>
+          <td>${rubPrice} ₽ / ${product.price} PZ</td>
           <td>${product.category.name}</td>
           <td>${product.isActive ? '✅ Активен' : '❌ Неактивен'}</td>
           <td>${new Date(product.createdAt).toLocaleDateString()}</td>
