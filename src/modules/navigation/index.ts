@@ -82,24 +82,56 @@ export const navigationModule: BotModule = {
 • Ваш бонус 10%
 • Бонус ${programType === 'DIRECT' ? '25%' : '15%+5%+5%'} начнет действовать при Вашей активности 200PZ в месяц`;
               
-            await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!${bonusText}`);
-            await logUserAction(ctx, 'partner:referral_joined', { 
-              referralCode, 
-              partnerId: partnerProfile.id,
-              programType 
-            });
-          }
-        } catch (error) {
-          console.error('Error processing referral:', error);
+          await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!${bonusText}`);
+          await logUserAction(ctx, 'partner:referral_joined', {
+            referralCode,
+            partnerId: partnerProfile.id,
+            programType
+          });
         }
+      } catch (error) {
+        console.error('Error processing referral:', error);
       }
-      
+    }
+
+    await ctx.reply(greeting, mainKeyboard());
+
+    // Send welcome message with video button
+    await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.', {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: '🎥 Посмотреть видео',
+              callback_data: 'nav:video',
+            },
+          ],
+          [
+            {
+              text: '📖 Подробнее',
+              callback_data: 'nav:more',
+            },
+          ],
+        ],
+      },
+    });
+    });
+
+
+    bot.hears(['Меню', 'Главное меню', 'Назад', '🛒 Магазин', '💰 Партнёрка', '⭐ Отзывы', 'ℹ️ О нас'], async (ctx) => {
+      await logUserAction(ctx, 'menu:main');
       await ctx.reply(greeting, mainKeyboard());
       
-      // Send welcome message with video link
-      await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.\n\n🎥 Посмотрите видео: https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4', {
+      // Send welcome message with video button
+      await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.', {
         reply_markup: {
           inline_keyboard: [
+            [
+              {
+                text: '🎥 Посмотреть видео',
+                callback_data: 'nav:video',
+              },
+            ],
             [
               {
                 text: '📖 Подробнее',
@@ -111,24 +143,10 @@ export const navigationModule: BotModule = {
       });
     });
 
-
-    bot.hears(['Меню', 'Главное меню', 'Назад', '🛒 Магазин', '💰 Партнёрка', '⭐ Отзывы', 'ℹ️ О нас'], async (ctx) => {
-      await logUserAction(ctx, 'menu:main');
-      await ctx.reply(greeting, mainKeyboard());
-      
-      // Send welcome message with video link
-      await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.\n\n🎥 Посмотрите видео: https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4', {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: '📖 Подробнее',
-                callback_data: 'nav:more',
-              },
-            ],
-          ],
-        },
-      });
+    bot.action('nav:video', async (ctx) => {
+      await ctx.answerCbQuery();
+      await logUserAction(ctx, 'cta:video');
+      await ctx.reply('🎥 Посмотрите видео о Plazma Water:\n\nhttps://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4');
     });
 
     bot.action('nav:more', async (ctx) => {
