@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -18,7 +18,7 @@ enum TransactionType {
 }
 
 model User {
-  id            Int             @id @default(autoincrement())
+  id            String          @id @default(auto()) @map("_id") @db.ObjectId
   telegramId    String          @unique
   firstName     String?
   lastName      String?
@@ -34,16 +34,16 @@ model User {
 }
 
 model UserHistory {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    Int
+  userId    String   @db.ObjectId
   action    String
   payload   Json?
   createdAt DateTime @default(now())
 }
 
 model Category {
-  id          Int        @id @default(autoincrement())
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   slug        String     @unique
   description String?
@@ -54,7 +54,7 @@ model Category {
 }
 
 model Product {
-  id               Int        @id @default(autoincrement())
+  id               String     @id @default(auto()) @map("_id") @db.ObjectId
   title            String
   summary          String
   description      String?
@@ -62,18 +62,18 @@ model Product {
   price            Decimal     @db.Decimal(12, 2)
   isActive         Boolean     @default(true)
   category         Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  categoryId       Int
+  categoryId       String     @db.ObjectId
   cartItems        CartItem[]
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 }
 
 model CartItem {
-  id        Int     @id @default(autoincrement())
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    Int
+  userId    String  @db.ObjectId
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId Int
+  productId String  @db.ObjectId
   quantity  Int     @default(1)
   createdAt DateTime @default(now())
 
@@ -81,9 +81,9 @@ model CartItem {
 }
 
 model OrderRequest {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   user        User?    @relation(fields: [userId], references: [id])
-  userId      Int?
+  userId      String?  @db.ObjectId
   contact     String?
   message     String
   itemsJson   Json
@@ -92,9 +92,9 @@ model OrderRequest {
 }
 
 model PartnerProfile {
-  id             Int                 @id @default(autoincrement())
+  id             String              @id @default(auto()) @map("_id") @db.ObjectId
   user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId         Int                 @unique
+  userId         String              @unique @db.ObjectId
   programType    PartnerProgramType
   referralCode   String              @unique
   balance        Decimal             @default(0) @db.Decimal(12, 2)
@@ -109,19 +109,19 @@ model PartnerProfile {
 }
 
 model PartnerReferral {
-  id          Int              @id @default(autoincrement())
+  id          String           @id @default(auto()) @map("_id") @db.ObjectId
   profile     PartnerProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId   Int
-  referredId  Int?
+  profileId   String           @db.ObjectId
+  referredId  String?          @db.ObjectId
   contact     String?
   level       Int
   createdAt   DateTime          @default(now())
 }
 
 model PartnerTransaction {
-  id          Int               @id @default(autoincrement())
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
   profile     PartnerProfile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId   Int
+  profileId   String            @db.ObjectId
   amount      Decimal           @db.Decimal(12, 2)
   type        TransactionType
   description String
@@ -129,7 +129,7 @@ model PartnerTransaction {
 }
 
 model Review {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   name      String
   photoUrl  String?
   content   String
