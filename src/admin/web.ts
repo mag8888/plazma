@@ -2635,7 +2635,7 @@ router.get('/products', requireAdmin, async (req, res) => {
            </div>`;
 
       html += `
-          <div class="product-card" data-category="${product.categoryId}">
+          <div class="product-card" data-category="${product.categoryId}" data-id="${product.id}">
             ${imageSection}
             <div class="product-header">
               <h3 class="product-title">${product.title}</h3>
@@ -2658,7 +2658,7 @@ router.get('/products', requireAdmin, async (req, res) => {
               <span>ID: ${product.id.slice(0, 8)}...</span>
             </div>
             <div class="product-actions">
-              <button type="button" class="edit-btn" onclick="openEditProductModal('${product.id}', '${product.title.replace(/'/g, "\'")}', '${product.summary ? product.summary.replace(/'/g, "\'") : ''}', '${product.description ? product.description.replace(/'/g, "\'") : ''}', ${product.price}, '${product.categoryId}', ${product.isActive ? 'true' : 'false'})">✏️ Редактировать</button>
+              <button type="button" class="edit-btn" onclick="editProductUsingCreateModal('${product.id}')">✏️ Редактировать</button>
               <form method="post" action="/admin/products/${product.id}/toggle-active">
                 <button type="submit" class="toggle-btn">${product.isActive ? 'Отключить' : 'Включить'}</button>
               </form>
