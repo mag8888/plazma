@@ -147,14 +147,34 @@ export const navigationModule: BotModule = {
       await ctx.answerCbQuery();
       await logUserAction(ctx, 'cta:video');
       
+      const videoUrl = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
+      
       try {
-        await ctx.replyWithVideo('https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4', {
+        // Try to send video as URL first
+        await ctx.replyWithVideo(videoUrl, {
           caption: '🎥 Plazma Water — источник энергии нового поколения',
         });
       } catch (error) {
         console.error('Error sending video:', error);
-        // Fallback to link if video fails
-        await ctx.reply('🎥 Посмотрите видео о Plazma Water:\n\nhttps://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4');
+        try {
+          // Try with different parameters
+          await ctx.replyWithVideo(videoUrl);
+        } catch (error2) {
+          console.error('Error sending video (second attempt):', error2);
+          // Final fallback - send as text with inline keyboard
+          await ctx.reply('🎥 Plazma Water — источник энергии нового поколения', {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: '🎥 Смотреть видео',
+                    url: videoUrl,
+                  },
+                ],
+              ],
+            },
+          });
+        }
       }
     });
 
