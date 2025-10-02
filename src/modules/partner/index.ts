@@ -109,16 +109,26 @@ async function showDashboard(ctx: Context) {
 }
 
 async function handlePlanSelection(ctx: Context, programType: PartnerProgramType, message: string) {
+  console.log('💰 Partner: handlePlanSelection called with type:', programType);
+  
   const user = await ensureUser(ctx);
   if (!user) {
+    console.log('💰 Partner: Failed to ensure user');
     await ctx.reply('Не удалось активировать программу. Попробуйте позже.');
     return;
   }
 
+  console.log('💰 Partner: User ensured, creating profile');
   const profile = await getOrCreatePartnerProfile(user.id, programType);
+  console.log('💰 Partner: Profile created:', profile.referralCode);
+  
   await logUserAction(ctx, 'partner:select-program', { programType });
   await ctx.answerCbQuery('Программа активирована');
-  await ctx.reply(`${message}\n\nВаша ссылка: ${buildReferralLink(profile.referralCode, programType)}`, partnerActionsKeyboard());
+  
+  const referralLink = buildReferralLink(profile.referralCode, programType);
+  console.log('💰 Partner: Generated referral link:', referralLink);
+  
+  await ctx.reply(`${message}\n\nВаша ссылка: ${referralLink}`, partnerActionsKeyboard());
 }
 
 async function showPartners(ctx: Context) {
@@ -224,21 +234,26 @@ async function showMultiInvite(ctx: Context) {
 export const partnerModule: BotModule = {
   async register(bot: Telegraf<Context>) {
     bot.hears(['Партнёрка', 'Партнерка', '💰 Партнёрка'], async (ctx) => {
+      console.log('💰 Partner: Button pressed');
       await logUserAction(ctx, 'menu:partners');
+      console.log('💰 Partner: Sending program intro');
       await ctx.reply(programIntro, planKeyboard());
     });
 
     bot.action(DASHBOARD_ACTION, async (ctx) => {
+      console.log('💰 Partner: Dashboard button pressed');
       await ctx.answerCbQuery();
       await logUserAction(ctx, 'partner:dashboard');
       await showDashboard(ctx);
     });
 
     bot.action(DIRECT_PLAN_ACTION, async (ctx) => {
+      console.log('💰 Partner: Direct plan button pressed');
       await handlePlanSelection(ctx, PartnerProgramType.DIRECT, directPlanText);
     });
 
     bot.action(MULTI_PLAN_ACTION, async (ctx) => {
+      console.log('💰 Partner: Multi-level plan button pressed');
       await handlePlanSelection(ctx, PartnerProgramType.MULTI_LEVEL, multiPlanText);
     });
 
