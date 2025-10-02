@@ -33,6 +33,8 @@ export async function getOrCreatePartnerProfile(userId: string, programType: Par
       userId,
       programType,
       referralCode,
+      balance: 0,
+      bonus: 0,
     },
   });
 }
@@ -70,7 +72,8 @@ export async function getPartnerDashboard(userId: string) {
 }
 
 export async function recordPartnerTransaction(profileId: string, amount: number, description: string, type: TransactionType = 'CREDIT') {
-  return prisma.partnerTransaction.create({
+  // First, create the transaction record
+  const transaction = await prisma.partnerTransaction.create({
     data: {
       profileId,
       amount,
@@ -78,6 +81,19 @@ export async function recordPartnerTransaction(profileId: string, amount: number
       type,
     },
   });
+
+  // Then, update the partner's balance
+  const balanceUpdate = type === 'CREDIT' ? amount : -amount;
+  await prisma.partnerProfile.update({
+    where: { id: profileId },
+    data: {
+      balance: {
+        increment: balanceUpdate
+      }
+    }
+  });
+
+  return transaction;
 }
 
 export async function createPartnerReferral(profileId: string, level: number, referredId?: string, contact?: string) {
