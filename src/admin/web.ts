@@ -198,6 +198,10 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="stat-number">${stats.orders}</div>
               <div class="stat-label">Заказы</div>
             </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/balances')">
+              <div class="stat-number">💰</div>
+              <div class="stat-label">Управление балансами</div>
+            </button>
           </div>
 
           <div class="balance-summary">
@@ -964,6 +968,304 @@ router.get('/partners-network', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Partners network error:', error);
     res.status(500).send('Ошибка загрузки сетки партнёров');
+  }
+});
+
+// Balance management page
+router.get('/balances', requireAdmin, async (req, res) => {
+  try {
+    console.log('💰 Admin balances page accessed');
+    
+    const users = await prisma.user.findMany({
+      include: {
+        partner: true
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление балансами</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          .btn-success { background: #28a745; }
+          .btn-danger { background: #dc3545; }
+          .btn-warning { background: #ffc107; color: #333; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+          .balance-positive { color: #28a745; font-weight: bold; }
+          .balance-zero { color: #6c757d; }
+          .balance-negative { color: #dc3545; font-weight: bold; }
+          .form-group { margin-bottom: 15px; }
+          .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+          .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+          .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+          .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px; }
+          .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+          .close:hover { color: black; }
+          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
+          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        </style>
+      </head>
+      <body>
+        <h2>💰 Управление балансами PZ</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        
+        ${req.query.success === 'balance_updated' ? '<div class="alert alert-success">✅ Баланс успешно обновлен</div>' : ''}
+        ${req.query.error === 'insufficient_balance' ? '<div class="alert alert-error">❌ Недостаточно средств на балансе</div>' : ''}
+        ${req.query.error === 'user_not_found' ? '<div class="alert alert-error">❌ Пользователь не найден</div>' : ''}
+        ${req.query.error === 'invalid_amount' ? '<div class="alert alert-error">❌ Неверная сумма</div>' : ''}
+        
+        <div style="margin: 20px 0;">
+          <button onclick="openModal('addPZ')" class="btn btn-success">➕ Начислить PZ</button>
+          <button onclick="openModal('deductPZ')" class="btn btn-danger">➖ Списать PZ</button>
+        </div>
+        
+        <table>
+          <tr>
+            <th>Пользователь</th>
+            <th>Telegram ID</th>
+            <th>Баланс PZ</th>
+            <th>Последняя активность</th>
+            <th>Действия</th>
+          </tr>
+    `;
+
+    users.forEach(user => {
+      const balance = user.partner?.balance || 0;
+      const balanceClass = balance > 0 ? 'balance-positive' : balance < 0 ? 'balance-negative' : 'balance-zero';
+      const lastActivity = user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Нет данных';
+      
+      html += `
+        <tr>
+          <td>${user.firstName || 'Не указано'} ${user.lastName || ''}</td>
+          <td>${user.telegramId}</td>
+          <td class="${balanceClass}">${balance.toFixed(2)} PZ</td>
+          <td>${lastActivity}</td>
+          <td>
+            <button onclick="openUserModal('${user.id}', '${user.firstName || 'Пользователь'}', ${balance})" class="btn btn-warning">📊 История</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+        
+        <!-- Add PZ Modal -->
+        <div id="addPZModal" class="modal">
+          <div class="modal-content">
+            <span class="close" onclick="closeModal('addPZ')">&times;</span>
+            <h3>➕ Начислить PZ</h3>
+            <form action="/admin/balances/add" method="post">
+              <div class="form-group">
+                <label>Пользователь:</label>
+                <select name="userId" required>
+                  <option value="">Выберите пользователя</option>
+                  ${users.map(user => `
+                    <option value="${user.id}">${user.firstName || 'Пользователь'} (${user.telegramId})</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Сумма PZ:</label>
+                <input type="number" name="amount" step="0.01" min="0.01" required placeholder="Например: 10.50">
+              </div>
+              <div class="form-group">
+                <label>Описание:</label>
+                <textarea name="description" required placeholder="Причина начисления"></textarea>
+              </div>
+              <button type="submit" class="btn btn-success">Начислить</button>
+            </form>
+          </div>
+        </div>
+        
+        <!-- Deduct PZ Modal -->
+        <div id="deductPZModal" class="modal">
+          <div class="modal-content">
+            <span class="close" onclick="closeModal('deductPZ')">&times;</span>
+            <h3>➖ Списать PZ</h3>
+            <form action="/admin/balances/deduct" method="post">
+              <div class="form-group">
+                <label>Пользователь:</label>
+                <select name="userId" required>
+                  <option value="">Выберите пользователя</option>
+                  ${users.map(user => `
+                    <option value="${user.id}">${user.firstName || 'Пользователь'} (${user.telegramId}) - ${(user.partner?.balance || 0).toFixed(2)} PZ</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Сумма PZ:</label>
+                <input type="number" name="amount" step="0.01" min="0.01" required placeholder="Например: 5.25">
+              </div>
+              <div class="form-group">
+                <label>Описание:</label>
+                <textarea name="description" required placeholder="Причина списания"></textarea>
+              </div>
+              <button type="submit" class="btn btn-danger">Списать</button>
+            </form>
+          </div>
+        </div>
+        
+        <!-- User History Modal -->
+        <div id="userHistoryModal" class="modal">
+          <div class="modal-content">
+            <span class="close" onclick="closeModal('userHistory')">&times;</span>
+            <h3 id="userHistoryTitle">📊 История операций</h3>
+            <div id="userHistoryContent">
+              <!-- History will be loaded here -->
+            </div>
+          </div>
+        </div>
+        
+        <script>
+          function openModal(type) {
+            document.getElementById(type + 'Modal').style.display = 'block';
+          }
+          
+          function closeModal(type) {
+            document.getElementById(type + 'Modal').style.display = 'none';
+          }
+          
+          function openUserModal(userId, userName, balance) {
+            document.getElementById('userHistoryTitle').textContent = '📊 История операций - ' + userName + ' (Баланс: ' + balance.toFixed(2) + ' PZ)';
+            document.getElementById('userHistoryContent').innerHTML = 'Загрузка...';
+            document.getElementById('userHistoryModal').style.display = 'block';
+            
+            // Load user history
+            fetch('/admin/balances/history/' + userId)
+              .then(response => response.text())
+              .then(html => {
+                document.getElementById('userHistoryContent').innerHTML = html;
+              })
+              .catch(error => {
+                document.getElementById('userHistoryContent').innerHTML = 'Ошибка загрузки истории';
+              });
+          }
+          
+          // Close modal when clicking outside
+          window.onclick = function(event) {
+            const modals = document.getElementsByClassName('modal');
+            for (let modal of modals) {
+              if (event.target == modal) {
+                modal.style.display = 'none';
+              }
+            }
+          }
+        </script>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Balances page error:', error);
+    res.status(500).send('Ошибка загрузки страницы балансов');
+  }
+});
+
+// Add PZ to user
+router.post('/balances/add', requireAdmin, async (req, res) => {
+  try {
+    const { userId, amount, description } = req.body;
+    
+    if (!userId || !amount || !description) {
+      return res.redirect('/admin/balances?error=invalid_amount');
+    }
+    
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return res.redirect('/admin/balances?error=invalid_amount');
+    }
+    
+    console.log('💰 Admin: Adding PZ to user:', userId, 'amount:', amountNum);
+    
+    const { addPZToUser } = await import('../services/partner-service.js');
+    await addPZToUser(userId, amountNum, description);
+    
+    console.log('💰 Admin: PZ added successfully');
+    res.redirect('/admin/balances?success=balance_updated');
+  } catch (error) {
+    console.error('Add PZ error:', error);
+    res.redirect('/admin/balances?error=user_not_found');
+  }
+});
+
+// Deduct PZ from user
+router.post('/balances/deduct', requireAdmin, async (req, res) => {
+  try {
+    const { userId, amount, description } = req.body;
+    
+    if (!userId || !amount || !description) {
+      return res.redirect('/admin/balances?error=invalid_amount');
+    }
+    
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return res.redirect('/admin/balances?error=invalid_amount');
+    }
+    
+    console.log('💰 Admin: Deducting PZ from user:', userId, 'amount:', amountNum);
+    
+    const { deductPZFromUser } = await import('../services/partner-service.js');
+    await deductPZFromUser(userId, amountNum, description);
+    
+    console.log('💰 Admin: PZ deducted successfully');
+    res.redirect('/admin/balances?success=balance_updated');
+  } catch (error) {
+    console.error('Deduct PZ error:', error);
+    if (error instanceof Error && error.message === 'Insufficient balance') {
+      res.redirect('/admin/balances?error=insufficient_balance');
+    } else {
+      res.redirect('/admin/balances?error=user_not_found');
+    }
+  }
+});
+
+// Get user transaction history
+router.get('/balances/history/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const { getUserTransactionHistory } = await import('../services/partner-service.js');
+    const transactions = await getUserTransactionHistory(userId, 50);
+    
+    let html = '<table style="width: 100%; border-collapse: collapse;">';
+    html += '<tr><th>Дата</th><th>Тип</th><th>Сумма</th><th>Описание</th></tr>';
+    
+    if (transactions.length === 0) {
+      html += '<tr><td colspan="4" style="text-align: center; padding: 20px;">История операций пуста</td></tr>';
+    } else {
+      transactions.forEach(tx => {
+        const sign = tx.type === 'CREDIT' ? '+' : '-';
+        const color = tx.type === 'CREDIT' ? '#28a745' : '#dc3545';
+        const date = new Date(tx.createdAt).toLocaleString('ru-RU');
+        
+        html += `
+          <tr>
+            <td>${date}</td>
+            <td>${tx.type === 'CREDIT' ? 'Начисление' : 'Списание'}</td>
+            <td style="color: ${color}; font-weight: bold;">${sign}${Number(tx.amount).toFixed(2)} PZ</td>
+            <td>${tx.description}</td>
+          </tr>
+        `;
+      });
+    }
+    
+    html += '</table>';
+    res.send(html);
+  } catch (error) {
+    console.error('History error:', error);
+    res.send('<p>Ошибка загрузки истории операций</p>');
   }
 });
 

@@ -123,3 +123,78 @@ export async function createPartnerReferral(profileId: string, level: number, re
     },
   });
 }
+
+// Add PZ to user's balance
+export async function addPZToUser(userId: string, amount: number, description: string, adminId?: string) {
+  console.log('💰 AddPZ: Adding PZ to user:', userId, 'amount:', amount);
+  
+  // Get or create partner profile
+  const profile = await getOrCreatePartnerProfile(userId, 'DIRECT');
+  
+  // Record transaction
+  const transaction = await recordPartnerTransaction(
+    profile.id, 
+    amount, 
+    description, 
+    'CREDIT'
+  );
+  
+  console.log('💰 AddPZ: Transaction recorded:', transaction.id);
+  return transaction;
+}
+
+// Deduct PZ from user's balance
+export async function deductPZFromUser(userId: string, amount: number, description: string, adminId?: string) {
+  console.log('💰 DeductPZ: Deducting PZ from user:', userId, 'amount:', amount);
+  
+  // Get partner profile
+  const profile = await prisma.partnerProfile.findUnique({
+    where: { userId }
+  });
+  
+  if (!profile) {
+    throw new Error('Partner profile not found');
+  }
+  
+  if (profile.balance < amount) {
+    throw new Error('Insufficient balance');
+  }
+  
+  // Record transaction
+  const transaction = await recordPartnerTransaction(
+    profile.id, 
+    amount, 
+    description, 
+    'DEBIT'
+  );
+  
+  console.log('💰 DeductPZ: Transaction recorded:', transaction.id);
+  return transaction;
+}
+
+// Get user's transaction history
+export async function getUserTransactionHistory(userId: string, limit: number = 50) {
+  const profile = await prisma.partnerProfile.findUnique({
+    where: { userId }
+  });
+  
+  if (!profile) {
+    return [];
+  }
+  
+  return prisma.partnerTransaction.findMany({
+    where: { profileId: profile.id },
+    orderBy: { createdAt: 'desc' },
+    take: limit
+  });
+}
+
+// Get all users with their balances
+export async function getAllUsersWithBalances() {
+  return prisma.user.findMany({
+    include: {
+      partner: true
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+}

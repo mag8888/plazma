@@ -8,6 +8,7 @@ import { reviewsModule } from '../modules/reviews/index.js';
 import { aboutModule } from '../modules/about/index.js';
 import { adminModule } from '../modules/admin/index.js';
 import { cartModule } from '../modules/cart/index.js';
+import { adminCommandsModule } from '../modules/admin-commands/index.js';
 
 const modules: BotModule[] = [
   shopModule,        // Register shop module first to handle shop button
@@ -17,6 +18,7 @@ const modules: BotModule[] = [
   reviewsModule,
   aboutModule,
   adminModule,
+  adminCommandsModule, // Register admin commands module
 ];
 
 export async function applyBotModules(bot: Telegraf<Context>) {
