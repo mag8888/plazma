@@ -76,8 +76,8 @@ export async function getPartnerList(userId: string) {
 
   if (!profile) return null;
 
-  // Get direct partners (level 1)
-  const directPartners = await prisma.partnerReferral.findMany({
+  // Get direct partners (level 1) - users who were referred by this partner
+  const directReferrals = await prisma.partnerReferral.findMany({
     where: { 
       profileId: profile.id, 
       level: 1 
@@ -92,8 +92,8 @@ export async function getPartnerList(userId: string) {
     orderBy: { createdAt: 'desc' }
   });
 
-  // Get multi-level partners (level 2 and 3)
-  const multiPartners = await prisma.partnerReferral.findMany({
+  // Get multi-level partners (level 2 and 3) - users referred by direct partners
+  const multiReferrals = await prisma.partnerReferral.findMany({
     where: { 
       profileId: profile.id, 
       level: { gt: 1 }
@@ -108,23 +108,71 @@ export async function getPartnerList(userId: string) {
     orderBy: { createdAt: 'desc' }
   });
 
+  // Get actual users who were referred with their referral data
+  const directPartnerData = directReferrals
+    .filter(ref => ref.referredId)
+    .map(ref => ({
+      user: null as any, // Will be filled below
+      level: ref.level,
+      joinedAt: ref.createdAt
+    }));
+
+  const multiPartnerData = multiReferrals
+    .filter(ref => ref.referredId)
+    .map(ref => ({
+      user: null as any, // Will be filled below
+      level: ref.level,
+      joinedAt: ref.createdAt
+    }));
+
+  // Get users for direct partners
+  const directUserIds = directReferrals.map(ref => ref.referredId).filter(Boolean) as string[];
+  const directUsers = await prisma.user.findMany({
+    where: { id: { in: directUserIds } }
+  });
+
+  // Get users for multi-level partners
+  const multiUserIds = multiReferrals.map(ref => ref.referredId).filter(Boolean) as string[];
+  const multiUsers = await prisma.user.findMany({
+    where: { id: { in: multiUserIds } }
+  });
+
+  // Combine user data with referral data
+  const directPartners = directReferrals
+    .filter(ref => ref.referredId)
+    .map(ref => {
+      const user = directUsers.find(u => u.id === ref.referredId);
+      if (!user) return null;
+      return {
+        id: user.id,
+        firstName: user.firstName || 'Пользователь',
+        username: user.username,
+        telegramId: user.telegramId,
+        level: ref.level,
+        joinedAt: ref.createdAt
+      };
+    })
+    .filter((partner): partner is NonNullable<typeof partner> => partner !== null);
+
+  const multiPartners = multiReferrals
+    .filter(ref => ref.referredId)
+    .map(ref => {
+      const user = multiUsers.find(u => u.id === ref.referredId);
+      if (!user) return null;
+      return {
+        id: user.id,
+        firstName: user.firstName || 'Пользователь',
+        username: user.username,
+        telegramId: user.telegramId,
+        level: ref.level,
+        joinedAt: ref.createdAt
+      };
+    })
+    .filter((partner): partner is NonNullable<typeof partner> => partner !== null);
+
   return {
-    directPartners: directPartners.map(ref => ({
-      id: ref.profile.user.id,
-      firstName: ref.profile.user.firstName || 'Пользователь',
-      username: ref.profile.user.username,
-      telegramId: ref.profile.user.telegramId,
-      level: ref.level,
-      joinedAt: ref.createdAt
-    })),
-    multiPartners: multiPartners.map(ref => ({
-      id: ref.profile.user.id,
-      firstName: ref.profile.user.firstName || 'Пользователь',
-      username: ref.profile.user.username,
-      telegramId: ref.profile.user.telegramId,
-      level: ref.level,
-      joinedAt: ref.createdAt
-    }))
+    directPartners,
+    multiPartners
   };
 }
 
