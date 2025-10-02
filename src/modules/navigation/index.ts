@@ -177,12 +177,6 @@ export const navigationModule: BotModule = {
       await ctx.reply(introDetails);
     });
 
-    // Handle "Партнёрка" button  
-    bot.hears(['💰 Партнёрка'], async (ctx) => {
-      await logUserAction(ctx, 'menu:partner');
-      // This will be handled by partner module
-      await ctx.reply('Переходим в партнёрскую программу...');
-    });
 
   },
 };
