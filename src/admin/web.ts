@@ -158,6 +158,10 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="stat-number">${stats.partners}</div>
               <div class="stat-label">Партнёры</div>
             </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/partners-network')">
+              <div class="stat-number">🌐</div>
+              <div class="stat-label">Сетка партнёров</div>
+            </button>
             <button class="stat-card" onclick="openAdminPage('/admin/reviews')">
               <div class="stat-number">${stats.reviews}</div>
               <div class="stat-label">Отзывы</div>
@@ -593,6 +597,81 @@ router.post('/reviews/:id/delete', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle partner inviter change
+router.post('/partners/:id/change-inviter', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newInviterCode } = req.body;
+    
+    // Find the new inviter by referral code
+    const newInviter = await prisma.partnerProfile.findUnique({
+      where: { referralCode: newInviterCode },
+      include: { user: true }
+    });
+    
+    if (!newInviter) {
+      return res.redirect('/admin/partners?error=inviter_not_found');
+    }
+    
+    // Find current partner
+    const currentPartner = await prisma.partnerProfile.findUnique({
+      where: { id },
+      include: { user: true }
+    });
+    
+    if (!currentPartner) {
+      return res.redirect('/admin/partners?error=partner_not_found');
+    }
+    
+    // Delete old referral if exists
+    await prisma.partnerReferral.deleteMany({
+      where: { referredId: currentPartner.userId }
+    });
+    
+    // Create new referral
+    await prisma.partnerReferral.create({
+      data: {
+        profileId: newInviter.id,
+        referredId: currentPartner.userId,
+        level: 1
+      }
+    });
+    
+    res.redirect('/admin/partners?success=inviter_changed');
+  } catch (error) {
+    console.error('Change inviter error:', error);
+    res.redirect('/admin/partners?error=inviter_change');
+  }
+});
+
+// Handle user deletion
+router.post('/users/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Delete related data first
+    await prisma.cartItem.deleteMany({ where: { userId: id } });
+    await prisma.orderRequest.deleteMany({ where: { userId: id } });
+    await prisma.userHistory.deleteMany({ where: { userId: id } });
+    
+    // Delete partner profile and referrals if exists
+    const partnerProfile = await prisma.partnerProfile.findUnique({ where: { userId: id } });
+    if (partnerProfile) {
+      await prisma.partnerReferral.deleteMany({ where: { profileId: partnerProfile.id } });
+      await prisma.partnerReferral.deleteMany({ where: { referredId: id } });
+      await prisma.partnerProfile.delete({ where: { userId: id } });
+    }
+    
+    // Delete user
+    await prisma.user.delete({ where: { id } });
+    
+    res.redirect('/admin/users?success=user_deleted');
+  } catch (error) {
+    console.error('User deletion error:', error);
+    res.redirect('/admin/users?error=user_delete');
+  }
+});
+
 // Handle order status update
 router.post('/orders/:id/update-status', requireAdmin, async (req, res) => {
   try {
@@ -728,6 +807,81 @@ router.get('/test', (req, res) => {
   res.json({ status: 'Admin routes working', timestamp: new Date().toISOString() });
 });
 
+// Partner network management
+router.get('/partners-network', requireAdmin, async (req, res) => {
+  try {
+    // Get all users with partner profiles
+    const usersWithPartners = await prisma.user.findMany({
+      include: {
+        partner: {
+          include: {
+            referrals: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Build network tree
+    const buildNetworkTree = (userId: string, level: number = 0): string => {
+      const user = usersWithPartners.find(u => u.id === userId);
+      if (!user || !user.partner) return '';
+
+      let html = '';
+      const indent = '  '.repeat(level);
+      
+      html += `${indent}👤 ${user.firstName || 'Пользователь'} (@${user.username || user.telegramId})\n`;
+      
+      if (user.partner.referrals.length > 0) {
+        html += `${indent}└── Партнёры:\n`;
+        user.partner.referrals.forEach((referral: any) => {
+          html += buildNetworkTree(referral.referredId, level + 1);
+        });
+      }
+      
+      return html;
+    };
+
+    let networkHtml = '';
+    usersWithPartners.forEach(user => {
+      if (user.partner) {
+        networkHtml += buildNetworkTree(user.id) + '\n';
+      }
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Сетка партнёров</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Courier New', monospace; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          .network { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; white-space: pre-line; }
+        </style>
+      </head>
+      <body>
+        <h2>🌐 Сетка партнёров</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        <a href="/admin/partners" class="btn">📊 Партнёры</a>
+        
+        <div class="network">
+          <h3>Дерево партнёрской сети:</h3>
+          ${networkHtml || 'Партнёрская сеть пуста'}
+        </div>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Partners network error:', error);
+    res.status(500).send('Ошибка загрузки сетки партнёров');
+  }
+});
+
 // Individual admin pages
 router.get('/users', requireAdmin, async (req, res) => {
   try {
@@ -755,18 +909,35 @@ router.get('/users', requireAdmin, async (req, res) => {
       <body>
         <h2>👥 Управление пользователями</h2>
         <a href="/admin" class="btn">← Назад</a>
+        
+        ${req.query.success === 'user_deleted' ? '<div class="alert alert-success">✅ Пользователь успешно удален</div>' : ''}
+        ${req.query.error === 'user_delete' ? '<div class="alert alert-error">❌ Ошибка при удалении пользователя</div>' : ''}
+        
+        <style>
+          .delete-btn { background: #f87171; color: #7f1d1d; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+          .delete-btn:hover { background: #ef4444; }
+          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
+          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        </style>
         <table>
-          <tr><th>ID</th><th>Имя</th><th>Username</th><th>Зарегистрирован</th><th>Активность</th></tr>
+          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
     `;
 
     users.forEach(user => {
       html += `
         <tr>
           <td>${user.id.slice(0, 8)}...</td>
+          <td>${user.telegramId}</td>
           <td>${user.firstName || 'Не указано'}</td>
-          <td>${user.username || 'Не указано'}</td>
+          <td>${user.username ? '@' + user.username : 'Не указано'}</td>
           <td>${new Date(user.createdAt).toLocaleDateString()}</td>
           <td>${user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Нет данных'}</td>
+          <td>
+            <form method="post" action="/admin/users/${user.id}/delete" onsubmit="return confirm('Удалить пользователя «${user.firstName || user.telegramId}»?')" style="display: inline;">
+              <button type="submit" class="delete-btn">🗑️ Удалить</button>
+            </form>
+          </td>
         </tr>
       `;
     });
@@ -873,8 +1044,19 @@ router.get('/partners', requireAdmin, async (req, res) => {
       <body>
         <h2>👥 Управление партнёрами</h2>
         <a href="/admin" class="btn">← Назад</a>
+        
+        ${req.query.success === 'inviter_changed' ? '<div class="alert alert-success">✅ Пригласитель успешно изменен</div>' : ''}
+        ${req.query.error === 'inviter_not_found' ? '<div class="alert alert-error">❌ Пригласитель с таким кодом не найден</div>' : ''}
+        ${req.query.error === 'inviter_change' ? '<div class="alert alert-error">❌ Ошибка при смене пригласителя</div>' : ''}
+        <style>
+          .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px; }
+          .change-inviter-btn:hover { background: #059669; }
+          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
+          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        </style>
         <table>
-          <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Партнёров</th><th>Код</th><th>Создан</th></tr>
+          <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Партнёров</th><th>Код</th><th>Пригласитель</th><th>Создан</th><th>Действия</th></tr>
     `;
 
     partners.forEach(partner => {
@@ -885,7 +1067,14 @@ router.get('/partners', requireAdmin, async (req, res) => {
           <td>${partner.balance} PZ</td>
           <td>${partner.totalPartners}</td>
           <td>${partner.referralCode}</td>
+          <td>Нет данных</td>
           <td>${new Date(partner.createdAt).toLocaleDateString()}</td>
+          <td>
+            <form method="post" action="/admin/partners/${partner.id}/change-inviter" style="display: inline;">
+              <input type="text" name="newInviterCode" placeholder="Код пригласителя" style="width: 120px; padding: 4px;" required>
+              <button type="submit" class="change-inviter-btn" onclick="return confirm('Изменить пригласителя для ${partner.user.firstName || 'пользователя'}?')">🔄</button>
+            </form>
+          </td>
         </tr>
       `;
     });
