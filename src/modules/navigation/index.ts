@@ -41,17 +41,28 @@ export const navigationModule: BotModule = {
       
       // Check if user came from referral link
       const startPayload = ctx.startPayload;
+      console.log('🔗 Referral: startPayload =', startPayload);
+      
       if (startPayload && (startPayload.startsWith('ref_direct_') || startPayload.startsWith('ref_multi_'))) {
-        const [prefix, referralCode] = startPayload.split('_', 2);
-        const programType = prefix === 'ref' ? 'DIRECT' : 'MULTI_LEVEL';
+        const parts = startPayload.split('_');
+        console.log('🔗 Referral: parts =', parts);
+        
+        const programType = parts[1] === 'direct' ? 'DIRECT' : 'MULTI_LEVEL';
+        const referralCode = parts.slice(2).join('_'); // Join remaining parts in case code contains underscores
+        
+        console.log('🔗 Referral: programType =', programType, 'referralCode =', referralCode);
         
         try {
           // Find partner profile by referral code
           const { prisma } = await import('../../lib/prisma.js');
+          console.log('🔗 Referral: Searching for partner profile with code:', referralCode);
+          
           const partnerProfile = await prisma.partnerProfile.findUnique({
             where: { referralCode },
             include: { user: true }
           });
+          
+          console.log('🔗 Referral: Found partner profile:', partnerProfile ? 'YES' : 'NO');
           
           if (partnerProfile) {
             // Create referral record
@@ -89,9 +100,13 @@ export const navigationModule: BotModule = {
             partnerId: partnerProfile.id,
             programType
           });
+        } else {
+          console.log('🔗 Referral: Partner profile not found for code:', referralCode);
+          await ctx.reply('❌ Реферальная ссылка недействительна. Партнёр не найден.');
         }
       } catch (error) {
-        console.error('Error processing referral:', error);
+        console.error('🔗 Referral: Error processing referral:', error);
+        await ctx.reply('❌ Ошибка при обработке реферальной ссылки. Попробуйте позже.');
       }
     }
 
