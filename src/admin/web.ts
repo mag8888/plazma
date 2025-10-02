@@ -331,6 +331,14 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="list-section">
                 <h3>💰 Последние транзакции</h3>
                 <div class="list-container">
+                  <div class="total-balance-header" style="background: #e8f5e8; padding: 10px; margin-bottom: 10px; border-radius: 6px; text-align: center; border: 2px solid #28a745;">
+                    <div style="font-size: 18px; font-weight: bold; color: #28a745;">
+                      💰 Общий баланс: ${totalBalance.toFixed(2)} PZ
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 2px;">
+                      Сумма всех балансов партнёров
+                    </div>
+                  </div>
                   ${await getRecentTransactions()}
                 </div>
               </div>
@@ -594,6 +602,10 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
             <div class="stat-item">
               <div class="stat-number">${sortedUsers.reduce((sum, u) => sum + u.totalOrderSum, 0).toFixed(2)} PZ</div>
               <div class="stat-label">Общая сумма заказов</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">${sortedUsers.reduce((sum, u) => sum + u.balance, 0).toFixed(2)} PZ</div>
+              <div class="stat-label">Общий баланс партнёров</div>
             </div>
           </div>
           
@@ -1119,8 +1131,10 @@ router.get('/partners', requireAdmin, async (req, res) => {
           <button type="submit" class="btn" style="background: #28a745;" onclick="return confirm('🔧 Исправить бонусы Roman Arctur?')">🔧 Исправить бонусы Roman</button>
         </form>
         
-        <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
-          <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
+        <div style="background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center; border: 3px solid #28a745; box-shadow: 0 4px 8px rgba(40, 167, 69, 0.2);">
+          <h2 style="margin: 0 0 5px 0; color: #28a745; font-size: 28px;">💰 Общий баланс всех партнёров</h2>
+          <div style="font-size: 36px; font-weight: bold; color: #155724; margin: 10px 0;">${totalBalance.toFixed(2)} PZ</div>
+          <div style="font-size: 14px; color: #666; margin-top: 5px;">Сумма всех балансов партнёров в системе</div>
         </div>
         
         ${req.query.success === 'inviter_changed' ? '<div class="alert alert-success">✅ Пригласитель успешно изменен</div>' : ''}
