@@ -6,6 +6,7 @@ import { getActiveCategories, getCategoryById, getProductById, getProductsByCate
 import { addProductToCart, cartItemsToText, getCartItems } from '../../services/cart-service.js';
 import { createOrderRequest } from '../../services/order-service.js';
 import { env } from '../../config/env.js';
+import { prisma } from '../../lib/prisma.js';
 
 const CATEGORY_ACTION_PREFIX = 'shop:cat:';
 const PRODUCT_MORE_PREFIX = 'shop:prod:more:';
@@ -16,8 +17,19 @@ async function showCategories(ctx: Context) {
   await logUserAction(ctx, 'shop:open');
   
   try {
+    console.log('🛍️ Loading categories...');
     const categories = await getActiveCategories();
+    console.log('🛍️ Found active categories:', categories.length);
+    
+    // Debug: also check all categories
+    const allCategories = await prisma.category.findMany();
+    console.log('🛍️ Total categories in DB:', allCategories.length);
+    allCategories.forEach(cat => {
+      console.log(`  - ${cat.name} (ID: ${cat.id}, Active: ${cat.isActive})`);
+    });
+    
     if (categories.length === 0) {
+      console.log('🛍️ No active categories found, showing empty message');
       await ctx.reply('🛍️ Каталог товаров Plazma Water\n\nКаталог пока пуст. Добавьте категории и товары в админке.');
       return;
     }
@@ -199,7 +211,9 @@ async function handleBuy(ctx: Context, productId: string) {
 
 export const shopModule: BotModule = {
   async register(bot: Telegraf<Context>) {
+    console.log('🛍️ Registering shop module...');
     bot.hears(['Магазин', 'Каталог', '🛒 Магазин'], async (ctx) => {
+      console.log('🛍️ Shop button pressed by user:', ctx.from?.id);
       await showCategories(ctx);
     });
 
