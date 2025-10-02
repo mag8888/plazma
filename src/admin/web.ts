@@ -1767,6 +1767,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
         <a href="/admin/partners-hierarchy" class="btn" style="background: #6f42c1;">🌳 Иерархия партнёров</a>
+        <a href="/admin/test-referral-links" class="btn" style="background: #17a2b8;">🧪 Тест ссылок</a>
         <form method="post" action="/admin/recalculate-bonuses" style="display: inline;">
           <button type="submit" class="btn" style="background: #28a745;" onclick="return confirm('Пересчитать бонусы всех партнёров?')">🔄 Пересчитать бонусы</button>
         </form>
@@ -2581,6 +2582,93 @@ router.post('/cleanup-duplicates', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Cleanup error:', error);
     res.redirect('/admin/partners?error=cleanup_failed');
+  }
+});
+
+// Test referral links endpoint
+router.get('/test-referral-links', requireAdmin, async (req, res) => {
+  try {
+    const { buildReferralLink } = await import('../services/partner-service.js');
+    
+    // Get a sample partner profile
+    const profile = await prisma.partnerProfile.findFirst({
+      include: { user: true }
+    });
+    
+    if (!profile) {
+      return res.send('❌ No partner profiles found for testing');
+    }
+    
+    const directLink = buildReferralLink(profile.referralCode, 'DIRECT');
+    const multiLink = buildReferralLink(profile.referralCode, 'MULTI_LEVEL');
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Test Referral Links</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+          .test-section { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 8px; }
+          .link { background: #e3f2fd; padding: 10px; margin: 5px 0; border-radius: 4px; word-break: break-all; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+        </style>
+      </head>
+      <body>
+        <h2>🧪 Test Referral Links</h2>
+        <a href="/admin/partners" class="btn">← Back to Partners</a>
+        
+        <div class="test-section">
+          <h3>📊 Test Partner Profile</h3>
+          <p><strong>Name:</strong> ${profile.user.firstName || 'Unknown'}</p>
+          <p><strong>Username:</strong> @${profile.user.username || 'no-username'}</p>
+          <p><strong>Program Type:</strong> ${profile.programType}</p>
+          <p><strong>Referral Code:</strong> ${profile.referralCode}</p>
+        </div>
+        
+        <div class="test-section">
+          <h3>🔗 Generated Links</h3>
+          
+          <h4>Direct Link (25% commission):</h4>
+          <div class="link">${directLink}</div>
+          <p><strong>Payload:</strong> ${directLink.split('?start=')[1]}</p>
+          
+          <h4>Multi-level Link (15% + 5% + 5% commission):</h4>
+          <div class="link">${multiLink}</div>
+          <p><strong>Payload:</strong> ${multiLink.split('?start=')[1]}</p>
+        </div>
+        
+        <div class="test-section">
+          <h3>🧪 Link Parsing Test</h3>
+          <p>Both links should be parsed correctly by the bot:</p>
+          <ul>
+            <li><strong>Direct link payload:</strong> Should start with "ref_direct_"</li>
+            <li><strong>Multi link payload:</strong> Should start with "ref_multi_"</li>
+            <li><strong>Both should:</strong> Award 3 PZ bonus to the inviter</li>
+            <li><strong>Both should:</strong> Create a referral record with level 1</li>
+          </ul>
+        </div>
+        
+        <div class="test-section">
+          <h3>📱 Test Instructions</h3>
+          <ol>
+            <li>Copy one of the links above</li>
+            <li>Open it in Telegram</li>
+            <li>Start the bot</li>
+            <li>Check that you receive a welcome message</li>
+            <li>Check that the inviter gets 3 PZ bonus</li>
+            <li>Check that a referral record is created</li>
+          </ol>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    res.send(html);
+  } catch (error) {
+    console.error('Test referral links error:', error);
+    res.send('❌ Error testing referral links: ' + (error instanceof Error ? error.message : String(error)));
   }
 });
 

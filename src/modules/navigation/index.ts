@@ -350,8 +350,9 @@ export const navigationModule: BotModule = {
             }
             
             console.log('🔗 Referral: User ensured, creating referral record');
-            // Create referral record using user ID (ObjectId)
-            await createPartnerReferral(partnerProfile.id, 1, user.id);
+            // Create referral record using user ID (ObjectId) with correct level based on program type
+            const referralLevel = programType === 'DIRECT' ? 1 : 1; // Both start at level 1
+            await createPartnerReferral(partnerProfile.id, referralLevel, user.id);
             
             // Award 3PZ to the inviter
             console.log('🔗 Referral: Awarding 3PZ bonus to inviter');
