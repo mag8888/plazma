@@ -397,18 +397,32 @@ router.post('/products/:id/toggle-active', requireAdmin, async (req, res) => {
 // Handle product image upload
 router.post('/products/:id/upload-image', requireAdmin, upload.single('image'), async (req, res) => {
   try {
+    console.log('🖼️ Image upload request received');
     const { id } = req.params;
+    console.log('🖼️ Product ID:', id);
+    
     const product = await prisma.product.findUnique({ where: { id } });
     
     if (!product) {
-      return res.redirect('/admin?error=product_not_found');
+      console.log('🖼️ Product not found:', id);
+      return res.redirect('/admin/products?error=product_not_found');
     }
 
+    console.log('🖼️ Product found:', product.title);
+    console.log('🖼️ Request file:', req.file ? 'present' : 'missing');
+    
     if (!req.file) {
-      return res.redirect('/admin?error=no_image');
+      console.log('🖼️ No file uploaded');
+      return res.redirect('/admin/products?error=no_image');
     }
 
-    console.log('Uploading product image to Cloudinary...');
+    console.log('🖼️ File details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+
+    console.log('🖼️ Uploading to Cloudinary...');
     const result = await new Promise<any>((resolve, reject) => {
       cloudinary.uploader.upload_stream(
         {
@@ -417,8 +431,10 @@ router.post('/products/:id/upload-image', requireAdmin, upload.single('image'), 
         },
         (error, result) => {
           if (error) {
+            console.error('🖼️ Cloudinary upload error:', error);
             reject(error);
           } else {
+            console.log('🖼️ Cloudinary upload success:', result?.secure_url);
             resolve(result);
           }
         },
@@ -426,16 +442,17 @@ router.post('/products/:id/upload-image', requireAdmin, upload.single('image'), 
     });
 
     const imageUrl = result.secure_url;
-    console.log('Product image uploaded:', imageUrl);
+    console.log('🖼️ Final image URL:', imageUrl);
 
-    await prisma.product.update({
+    const updatedProduct = await prisma.product.update({
       where: { id },
       data: { imageUrl }
     });
 
+    console.log('🖼️ Database updated, product imageUrl:', updatedProduct.imageUrl);
     res.redirect('/admin/products?success=image_updated');
   } catch (error) {
-    console.error('Product image upload error:', error);
+    console.error('🖼️ Product image upload error:', error);
     res.redirect('/admin/products?error=image_upload');
   }
 });
@@ -883,11 +900,19 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-actions .image-btn:hover { background: #059669; }
           .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
           img.product-image { width: 100%; height: 160px; object-fit: cover; border-radius: 10px; }
+          .alert { padding: 12px 16px; margin: 16px 0; border-radius: 8px; font-weight: 500; }
+          .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+          .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
         </style>
       </head>
       <body>
         <h2>🛍 Управление товарами</h2>
         <a href="/admin" class="btn">← Назад</a>
+        
+        ${req.query.success === 'image_updated' ? '<div class="alert alert-success">✅ Фото успешно обновлено!</div>' : ''}
+        ${req.query.error === 'no_image' ? '<div class="alert alert-error">❌ Файл не выбран</div>' : ''}
+        ${req.query.error === 'image_upload' ? '<div class="alert alert-error">❌ Ошибка загрузки фото</div>' : ''}
+        ${req.query.error === 'product_not_found' ? '<div class="alert alert-error">❌ Товар не найден</div>' : ''}
 
         <div class="filters">
           <button type="button" class="filter-btn active" data-filter="all">Все категории (${allProducts.length})</button>
