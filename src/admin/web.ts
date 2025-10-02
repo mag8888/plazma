@@ -12,10 +12,13 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET || '3tqNb1QPMICBTW0bTLus5HFHGQI',
 });
 
-// Configure multer for file uploads (use memory storage for Railway)
-const upload = multer({ storage: multer.memoryStorage() });
-
 const router = express.Router();
+
+// Configure multer for file uploads
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 // Middleware to check admin access
 const requireAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -473,6 +476,15 @@ router.get('/', requireAdmin, async (req, res) => {
           .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; }
           .form-group textarea { height: 100px; resize: vertical; }
           .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+          
+          /* Product Form Styles */
+          .form-row { display: flex; gap: 20px; margin-bottom: 15px; }
+          .form-row .form-group { flex: 1; }
+          .regions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+          .regions-grid label { display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; cursor: pointer; }
+          .regions-grid label:hover { background: #e9ecef; }
+          .char-count { text-align: right; font-size: 12px; color: #6c757d; margin-top: 5px; }
+          .file-info { font-size: 12px; color: #6c757d; margin-top: 5px; }
         </style>
       </head>
       <body>
@@ -605,6 +617,7 @@ router.get('/', requireAdmin, async (req, res) => {
                 <a href="/admin/products" class="btn">🛍️ Товары</a>
                 <a href="/admin/reviews" class="btn">⭐ Отзывы</a>
                 <a href="/admin/orders" class="btn">📦 Заказы</a>
+                <button class="btn" onclick="openAddProductModal()" style="background: #28a745;">➕ Добавить товар</button>
               </div>
             </div>
             <p>Управление каталогом товаров, отзывами и заказами.</p>
@@ -683,6 +696,117 @@ router.get('/', requireAdmin, async (req, res) => {
               <button class="btn" onclick="closeMessageComposer()" style="background: #6c757d;">Отмена</button>
               <button class="btn" onclick="sendMessages()" style="background: #28a745;">📤 Отправить</button>
             </div>
+          </div>
+        </div>
+
+        <!-- Add Product Modal -->
+        <div id="addProductModal" class="modal">
+          <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+              <h2>➕ Добавить новый товар</h2>
+              <span class="close" onclick="closeAddProductModal()">&times;</span>
+            </div>
+            
+            <form id="addProductForm">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Название товара *</label>
+                  <input type="text" id="productName" required placeholder="Введите название товара">
+                </div>
+                <div class="form-group">
+                  <label>Цена (PZ) *</label>
+                  <input type="number" id="productPrice" step="0.01" min="0" required placeholder="0.00">
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Категория *</label>
+                  <div style="display: flex; gap: 10px;">
+                    <select id="productCategory" required style="flex: 1;">
+                      <option value="">Выберите категорию</option>
+                    </select>
+                    <button type="button" class="btn" onclick="openAddCategoryModal()" style="background: #17a2b8; padding: 8px 12px;">+</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Количество на складе</label>
+                  <input type="number" id="productStock" min="0" placeholder="0">
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label>Регионы доставки *</label>
+                <div class="regions-grid">
+                  <label><input type="checkbox" name="regions" value="moscow"> 🇷🇺 Москва</label>
+                  <label><input type="checkbox" name="regions" value="spb"> 🇷🇺 Санкт-Петербург</label>
+                  <label><input type="checkbox" name="regions" value="russia"> 🇷🇺 Вся Россия</label>
+                  <label><input type="checkbox" name="regions" value="kazakhstan"> 🇰🇿 Казахстан</label>
+                  <label><input type="checkbox" name="regions" value="belarus"> 🇧🇾 Беларусь</label>
+                  <label><input type="checkbox" name="regions" value="ukraine"> 🇺🇦 Украина</label>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label>Краткое описание *</label>
+                <textarea id="productShortDescription" required placeholder="Краткое описание товара (до 200 символов)" maxlength="200" style="height: 80px;"></textarea>
+                <div class="char-count" id="shortDescCount">0/200</div>
+              </div>
+              
+              <div class="form-group">
+                <label>Полное описание *</label>
+                <textarea id="productFullDescription" required placeholder="Подробное описание товара" style="height: 120px;"></textarea>
+              </div>
+              
+              <div class="form-group">
+                <label>Изображение товара</label>
+                <input type="file" id="productImage" accept="image/*">
+                <div class="file-info">Рекомендуемый размер: 800x600px, формат: JPG/PNG</div>
+              </div>
+              
+              <div class="form-group">
+                <label>
+                  <input type="checkbox" id="productActive"> Товар активен (доступен для покупки)
+                </label>
+              </div>
+              
+              <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeAddProductModal()" style="background: #6c757d;">Отмена</button>
+                <button type="submit" class="btn" style="background: #28a745;">💾 Создать товар</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Add Category Modal -->
+        <div id="addCategoryModal" class="modal">
+          <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+              <h2>📂 Добавить новую категорию</h2>
+              <span class="close" onclick="closeAddCategoryModal()">&times;</span>
+            </div>
+            
+            <form id="addCategoryForm">
+              <div class="form-group">
+                <label>Название категории *</label>
+                <input type="text" id="categoryName" required placeholder="Введите название категории">
+              </div>
+              
+              <div class="form-group">
+                <label>Описание категории</label>
+                <textarea id="categoryDescription" placeholder="Описание категории" style="height: 80px;"></textarea>
+              </div>
+              
+              <div class="form-group">
+                <label>Иконка категории</label>
+                <input type="text" id="categoryIcon" placeholder="Эмодзи или текст (например: 🍎)">
+              </div>
+              
+              <div class="modal-footer">
+                <button type="button" class="btn" onclick="closeAddCategoryModal()" style="background: #6c757d;">Отмена</button>
+                <button type="submit" class="btn" style="background: #17a2b8;">📂 Создать категорию</button>
+              </div>
+            </form>
           </div>
         </div>
         
@@ -880,6 +1004,135 @@ router.get('/', requireAdmin, async (req, res) => {
               const buttonsSection = document.getElementById('buttonsSection');
               buttonsSection.style.display = this.checked ? 'block' : 'none';
             });
+            
+            // Load categories when product modal opens
+            document.getElementById('addProductModal').addEventListener('shown.bs.modal', loadCategories);
+            
+            // Character counter for short description
+            const shortDesc = document.getElementById('productShortDescription');
+            const charCount = document.getElementById('shortDescCount');
+            if (shortDesc && charCount) {
+              shortDesc.addEventListener('input', function() {
+                charCount.textContent = this.value.length + '/200';
+              });
+            }
+          });
+          
+          // Product modal functions
+          function openAddProductModal() {
+            document.getElementById('addProductModal').style.display = 'block';
+            loadCategories();
+          }
+          
+          function closeAddProductModal() {
+            document.getElementById('addProductModal').style.display = 'none';
+            document.getElementById('addProductForm').reset();
+            document.getElementById('shortDescCount').textContent = '0/200';
+          }
+          
+          function openAddCategoryModal() {
+            document.getElementById('addCategoryModal').style.display = 'block';
+          }
+          
+          function closeAddCategoryModal() {
+            document.getElementById('addCategoryModal').style.display = 'none';
+            document.getElementById('addCategoryForm').reset();
+          }
+          
+          // Load categories for product form
+          async function loadCategories() {
+            try {
+              const response = await fetch('/admin/api/categories');
+              const categories = await response.json();
+              
+              const select = document.getElementById('productCategory');
+              select.innerHTML = '<option value="">Выберите категорию</option>';
+              
+              categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category.id;
+                option.textContent = category.icon ? category.icon + ' ' + category.name : category.name;
+                select.appendChild(option);
+              });
+            } catch (error) {
+              console.error('Error loading categories:', error);
+            }
+          }
+          
+          // Handle product form submission
+          document.getElementById('addProductForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('name', document.getElementById('productName').value);
+            formData.append('price', document.getElementById('productPrice').value);
+            formData.append('categoryId', document.getElementById('productCategory').value);
+            formData.append('stock', document.getElementById('productStock').value || 0);
+            formData.append('shortDescription', document.getElementById('productShortDescription').value);
+            formData.append('fullDescription', document.getElementById('productFullDescription').value);
+            formData.append('active', document.getElementById('productActive').checked);
+            
+            // Get selected regions
+            const regions = Array.from(document.querySelectorAll('input[name="regions"]:checked')).map(cb => cb.value);
+            formData.append('regions', JSON.stringify(regions));
+            
+            // Add image if selected
+            const imageFile = document.getElementById('productImage').files[0];
+            if (imageFile) {
+              formData.append('image', imageFile);
+            }
+            
+            try {
+              const response = await fetch('/admin/api/products', {
+                method: 'POST',
+                body: formData
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                alert('✅ Товар успешно создан!');
+                closeAddProductModal();
+                // Refresh the page to show new product
+                window.location.reload();
+              } else {
+                alert('❌ Ошибка при создании товара: ' + result.error);
+              }
+            } catch (error) {
+              alert('❌ Ошибка: ' + error.message);
+            }
+          });
+          
+          // Handle category form submission
+          document.getElementById('addCategoryForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const categoryData = {
+              name: document.getElementById('categoryName').value,
+              description: document.getElementById('categoryDescription').value,
+              icon: document.getElementById('categoryIcon').value
+            };
+            
+            try {
+              const response = await fetch('/admin/api/categories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(categoryData)
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                alert('✅ Категория успешно создана!');
+                closeAddCategoryModal();
+                // Reload categories in product form
+                loadCategories();
+              } else {
+                alert('❌ Ошибка при создании категории: ' + result.error);
+              }
+            } catch (error) {
+              alert('❌ Ошибка: ' + error.message);
+            }
           });
         </script>
       </body>
@@ -1283,6 +1536,126 @@ router.post('/send-messages', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Send messages error:', error);
     res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// API: Get categories
+router.get('/api/categories', requireAdmin, async (req, res) => {
+  try {
+    const categories = await prisma.category.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(categories);
+  } catch (error) {
+    console.error('Get categories error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка загрузки категорий' });
+  }
+});
+
+// API: Create category
+router.post('/api/categories', requireAdmin, async (req, res) => {
+  try {
+    const { name, description, icon } = req.body;
+    
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Название категории обязательно' });
+    }
+    
+    const category = await prisma.category.create({
+      data: {
+        name: name.trim(),
+        slug: name.trim().toLowerCase().replace(/\s+/g, '-'),
+        description: description?.trim() || '',
+        isActive: true
+      }
+    });
+    
+    res.json({ success: true, category });
+  } catch (error) {
+    console.error('Create category error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка создания категории' });
+  }
+});
+
+// API: Create product
+router.post('/api/products', requireAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const { name, price, categoryId, stock, shortDescription, fullDescription, active, regions } = req.body;
+    
+    // Validation
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Название товара обязательно' });
+    }
+    if (!price || isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+      return res.status(400).json({ success: false, error: 'Цена должна быть положительным числом' });
+    }
+    if (!categoryId) {
+      return res.status(400).json({ success: false, error: 'Выберите категорию' });
+    }
+    if (!shortDescription || !shortDescription.trim()) {
+      return res.status(400).json({ success: false, error: 'Краткое описание обязательно' });
+    }
+    if (!fullDescription || !fullDescription.trim()) {
+      return res.status(400).json({ success: false, error: 'Полное описание обязательно' });
+    }
+    
+    // Parse regions
+    let regionsArray = [];
+    try {
+      regionsArray = JSON.parse(regions);
+    } catch {
+      return res.status(400).json({ success: false, error: 'Неверный формат регионов' });
+    }
+    
+    if (!Array.isArray(regionsArray) || regionsArray.length === 0) {
+      return res.status(400).json({ success: false, error: 'Выберите хотя бы один регион' });
+    }
+    
+    // Check if category exists
+    const category = await prisma.category.findUnique({ where: { id: categoryId } });
+    if (!category) {
+      return res.status(400).json({ success: false, error: 'Категория не найдена' });
+    }
+    
+    // Handle image upload (if provided)
+    let imageUrl = '';
+    if (req.file) {
+      try {
+        // Upload to Cloudinary
+        const result = await new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            { resource_type: 'auto', folder: 'plazma-products' },
+            (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+            }
+          ).end(req.file!.buffer);
+        });
+        
+        imageUrl = (result as any).secure_url;
+      } catch (error) {
+        console.error('Image upload error:', error);
+        return res.status(500).json({ success: false, error: 'Ошибка загрузки изображения' });
+      }
+    }
+    
+    // Create product
+    const product = await prisma.product.create({
+      data: {
+        title: name.trim(),
+        summary: shortDescription.trim(),
+        description: fullDescription.trim(),
+        price: parseFloat(price),
+        categoryId,
+        imageUrl,
+        isActive: active === 'true' || active === true
+      }
+    });
+    
+    res.json({ success: true, product });
+  } catch (error) {
+    console.error('Create product error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка создания товара' });
   }
 });
 
