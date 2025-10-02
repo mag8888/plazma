@@ -156,7 +156,7 @@ router.get('/', requireAdmin, async (req, res) => {
           <div class="sections">
             <div class="section">
               <h3>📁 Категории</h3>
-              <a href="/admin/categories" class="btn">Управление категориями</a>
+              <button onclick="openAdminPage('/admin/categories')" class="btn">Управление категориями</button>
               <form action="/admin/categories" method="post">
                 <div class="form-group">
                   <label>Название:</label>
@@ -176,7 +176,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
             <div class="section">
               <h3>🛍 Товары</h3>
-              <a href="/admin/products" class="btn">Управление товарами</a>
+              <button onclick="openAdminPage('/admin/products')" class="btn">Управление товарами</button>
               <form action="/admin/products" method="post" enctype="multipart/form-data">
                 <div class="form-group">
                   <label>Название:</label>
@@ -224,7 +224,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
             <div class="section">
               <h3>⭐ Отзывы</h3>
-              <a href="/admin/reviews" class="btn">Управление отзывами</a>
+              <button onclick="openAdminPage('/admin/reviews')" class="btn">Управление отзывами</button>
               <form action="/admin/reviews" method="post">
                 <div class="form-group">
                   <label>Имя:</label>
@@ -249,19 +249,25 @@ router.get('/', requireAdmin, async (req, res) => {
 
             <div class="section">
               <h3>👥 Партнёры</h3>
-              <a href="/admin/partners" class="btn">Управление партнёрами</a>
+              <button onclick="openAdminPage('/admin/partners')" class="btn">Управление партнёрами</button>
               <p>Просмотр всех партнёров и их статистики</p>
             </div>
 
             <div class="section">
               <h3>📦 Заказы</h3>
-              <a href="/admin/orders" class="btn">Управление заказами</a>
+              <button onclick="openAdminPage('/admin/orders')" class="btn">Управление заказами</button>
               <p>Просмотр и обработка заказов</p>
             </div>
           </div>
         </div>
 
         <script>
+          // Function to open admin pages
+          function openAdminPage(url) {
+            console.log('Opening admin page:', url);
+            window.location.href = url;
+          }
+          
           // Add admin ID to all requests
           fetch('/admin', {
             headers: {
