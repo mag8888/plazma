@@ -2562,6 +2562,8 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-actions .delete-btn:hover { background: #ef4444; }
           .product-actions .image-btn { background: #10b981; color: #064e3b; }
           .product-actions .image-btn:hover { background: #059669; }
+          .product-actions .edit-btn { background: #e0e7ff; color: #1d4ed8; }
+          .product-actions .edit-btn:hover { background: #c7d2fe; }
           .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
           img.product-image { width: 100%; height: 200px; object-fit: cover; border-radius: 10px; }
           .product-image-placeholder { 
@@ -2656,6 +2658,7 @@ router.get('/products', requireAdmin, async (req, res) => {
               <span>ID: ${product.id.slice(0, 8)}...</span>
             </div>
             <div class="product-actions">
+              <button type="button" class="edit-btn" onclick="openEditProductModal('${product.id}', '${product.title.replace(/'/g, "\'")}', '${product.summary ? product.summary.replace(/'/g, "\'") : ''}', '${product.description ? product.description.replace(/'/g, "\'") : ''}', ${product.price}, '${product.categoryId}', ${product.isActive ? 'true' : 'false'})">✏️ Редактировать</button>
               <form method="post" action="/admin/products/${product.id}/toggle-active">
                 <button type="submit" class="toggle-btn">${product.isActive ? 'Отключить' : 'Включить'}</button>
               </form>
@@ -2703,6 +2706,28 @@ router.get('/products', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Products page error:', error);
     res.status(500).send('Ошибка загрузки товаров');
+  }
+});
+
+// Update product
+router.post('/products/:productId/update', requireAdmin, express.json(), async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { title, price, summary, description, isActive } = req.body as any;
+    const product = await prisma.product.update({
+      where: { id: productId },
+      data: {
+        title: typeof title === 'string' ? title.trim() : undefined,
+        price: typeof price === 'number' ? price : undefined,
+        summary: typeof summary === 'string' ? summary : undefined,
+        description: typeof description === 'string' ? description : undefined,
+        isActive: typeof isActive === 'boolean' ? isActive : undefined,
+      },
+    });
+    res.json({ success: true, product });
+  } catch (error) {
+    console.error('Update product error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка обновления товара' });
   }
 });
 
