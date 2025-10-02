@@ -264,10 +264,10 @@ export const shopModule: BotModule = {
       
       // Save region to user and show categories
       const user = await ensureUser(ctx);
-      if (regionOrAction === 'RUSSIA' || regionOrAction === 'BALI') {
+      if (user && (regionOrAction === 'RUSSIA' || regionOrAction === 'BALI')) {
         await prisma.user.update({
           where: { id: user.id },
-          data: { selectedRegion: regionOrAction as any }
+          data: { selectedRegion: regionOrAction as any } as any
         });
         await logUserAction(ctx, 'shop:region_selected', { region: regionOrAction });
         await showCategories(ctx, regionOrAction);
@@ -281,7 +281,7 @@ export const shopModule: BotModule = {
       
       // Get user's selected region
       const user = await ensureUser(ctx);
-      const region = user.selectedRegion || 'RUSSIA';
+      const region = (user as any)?.selectedRegion || 'RUSSIA';
       
       await logUserAction(ctx, 'shop:category', { categoryId, region });
       await sendProductCards(ctx, categoryId, region);

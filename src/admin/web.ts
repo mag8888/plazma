@@ -988,7 +988,7 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
         isActive: true,
         availableInRussia: availableInRussia === 'on',
         availableInBali: availableInBali === 'on'
-      }
+      } as any
     });
 
     console.log('Product created:', product.id);
@@ -1746,8 +1746,8 @@ router.get('/products', requireAdmin, async (req, res) => {
             <span class="badge badge-category">${product.categoryName}</span>
             <div style="margin: 8px 0;">
               <span style="font-size: 12px; color: #666;">Регионы:</span>
-              ${product.availableInRussia ? '<span style="background: #e3f2fd; color: #1976d2; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px;">🇷🇺 Россия</span>' : ''}
-              ${product.availableInBali ? '<span style="background: #f3e5f5; color: #7b1fa2; padding: 2px 6px; border-radius: 4px; font-size: 11px;">🇮🇩 Бали</span>' : ''}
+              ${(product as any).availableInRussia ? '<span style="background: #e3f2fd; color: #1976d2; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px;">🇷🇺 Россия</span>' : ''}
+              ${(product as any).availableInBali ? '<span style="background: #f3e5f5; color: #7b1fa2; padding: 2px 6px; border-radius: 4px; font-size: 11px;">🇮🇩 Бали</span>' : ''}
             </div>
             <p class="product-summary">${product.summary}</p>
             <div class="product-price">${priceFormatted}</div>
