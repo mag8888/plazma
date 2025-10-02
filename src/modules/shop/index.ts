@@ -14,23 +14,29 @@ const PRODUCT_BUY_PREFIX = 'shop:prod:buy:';
 
 async function showCategories(ctx: Context) {
   await logUserAction(ctx, 'shop:open');
-  const categories = await getActiveCategories();
-  if (categories.length === 0) {
-    await ctx.reply('Каталог пока пуст. Добавьте категории и товары в админке.');
-    return;
-  }
+  
+  try {
+    const categories = await getActiveCategories();
+    if (categories.length === 0) {
+      await ctx.reply('🛍️ Каталог товаров Plazma Water\n\nКаталог пока пуст. Добавьте категории и товары в админке.');
+      return;
+    }
 
-  // Show catalog with products grouped by categories
-  await ctx.reply('🛍️ Каталог товаров Plazma Water\n\nВыберите категорию:', {
-    reply_markup: {
-      inline_keyboard: categories.map((category: any) => [
-        {
-          text: `📂 ${category.name}`,
-          callback_data: `${CATEGORY_ACTION_PREFIX}${category.id}`,
-        },
-      ]),
-    },
-  });
+    // Show catalog with products grouped by categories
+    await ctx.reply('🛍️ Каталог товаров Plazma Water\n\nВыберите категорию:', {
+      reply_markup: {
+        inline_keyboard: categories.map((category: any) => [
+          {
+            text: `📂 ${category.name}`,
+            callback_data: `${CATEGORY_ACTION_PREFIX}${category.id}`,
+          },
+        ]),
+      },
+    });
+  } catch (error) {
+    console.error('Error loading categories:', error);
+    await ctx.reply('🛍️ Каталог товаров Plazma Water\n\n❌ Ошибка загрузки каталога. Попробуйте позже.');
+  }
 }
 
 function formatProductMessage(product: { title: string; summary: string; price: unknown }) {
@@ -40,55 +46,60 @@ function formatProductMessage(product: { title: string; summary: string; price: 
 }
 
 async function sendProductCards(ctx: Context, categoryId: string) {
-  const category = await getCategoryById(categoryId);
-  if (!category) {
-    await ctx.reply('Категория не найдена.');
-    return;
-  }
-
-  const products = await getProductsByCategory(categoryId);
-  if (products.length === 0) {
-    await ctx.reply('В этой категории пока нет товаров.');
-    return;
-  }
-
-  // Show category header
-  await ctx.reply(`📂 ${category.name}\n\nТовары в категории:`);
-
-  // Send products in a grid layout
-  for (const product of products) {
-    const buttons = [];
-    if (product.description) {
-      buttons.push(Markup.button.callback('📖 Подробнее', `${PRODUCT_MORE_PREFIX}${product.id}`));
+  try {
+    const category = await getCategoryById(categoryId);
+    if (!category) {
+      await ctx.reply('❌ Категория не найдена.');
+      return;
     }
-    buttons.push(Markup.button.callback('🛒 В корзину', `${PRODUCT_CART_PREFIX}${product.id}`));
-    buttons.push(Markup.button.callback('💳 Купить', `${PRODUCT_BUY_PREFIX}${product.id}`));
 
-    const message = formatProductMessage(product);
-    
-    if (product.imageUrl) {
-      await ctx.replyWithPhoto(product.imageUrl, {
-        caption: message,
-        ...Markup.inlineKeyboard([buttons]),
-      });
-    } else {
-      await ctx.reply(message, Markup.inlineKeyboard([buttons]));
+    const products = await getProductsByCategory(categoryId);
+    if (products.length === 0) {
+      await ctx.reply(`📂 ${category.name}\n\nВ этой категории пока нет товаров.`);
+      return;
     }
-  }
 
-  // Add back to categories button
-  await ctx.reply('Выберите действие:', {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: '🔙 К категориям',
-            callback_data: 'shop:categories',
-          },
+    // Show category header
+    await ctx.reply(`📂 ${category.name}\n\nТовары в категории:`);
+
+    // Send products in a grid layout
+    for (const product of products) {
+      const buttons = [];
+      if (product.description) {
+        buttons.push(Markup.button.callback('📖 Подробнее', `${PRODUCT_MORE_PREFIX}${product.id}`));
+      }
+      buttons.push(Markup.button.callback('🛒 В корзину', `${PRODUCT_CART_PREFIX}${product.id}`));
+      buttons.push(Markup.button.callback('💳 Купить', `${PRODUCT_BUY_PREFIX}${product.id}`));
+
+      const message = formatProductMessage(product);
+      
+      if (product.imageUrl) {
+        await ctx.replyWithPhoto(product.imageUrl, {
+          caption: message,
+          ...Markup.inlineKeyboard([buttons]),
+        });
+      } else {
+        await ctx.reply(message, Markup.inlineKeyboard([buttons]));
+      }
+    }
+
+    // Add back to categories button
+    await ctx.reply('Выберите действие:', {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: '🔙 К категориям',
+              callback_data: 'shop:categories',
+            },
+          ],
         ],
-      ],
-    },
-  });
+      },
+    });
+  } catch (error) {
+    console.error('Error loading products:', error);
+    await ctx.reply('❌ Ошибка загрузки товаров. Попробуйте позже.');
+  }
 }
 
 async function handleAddToCart(ctx: Context, productId: string) {
