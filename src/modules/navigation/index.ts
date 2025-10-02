@@ -118,7 +118,7 @@ export const navigationModule: BotModule = {
     });
 
 
-    bot.hears(['Меню', 'Главное меню', 'Назад', '🛒 Магазин', '💰 Партнёрка', '⭐ Отзывы', 'ℹ️ О нас'], async (ctx) => {
+    bot.hears(['Меню', 'Главное меню', 'Назад'], async (ctx) => {
       await logUserAction(ctx, 'menu:main');
       await ctx.reply(greeting, mainKeyboard());
       
@@ -182,6 +182,19 @@ export const navigationModule: BotModule = {
       await ctx.answerCbQuery();
       await logUserAction(ctx, 'cta:detailed-intro');
       await ctx.reply(introDetails);
+    });
+
+    // Handle "О нас" button
+    bot.hears(['ℹ️ О нас'], async (ctx) => {
+      await logUserAction(ctx, 'menu:about');
+      await ctx.reply(introDetails);
+    });
+
+    // Handle "Партнёрка" button  
+    bot.hears(['💰 Партнёрка'], async (ctx) => {
+      await logUserAction(ctx, 'menu:partner');
+      // This will be handled by partner module
+      await ctx.reply('Переходим в партнёрскую программу...');
     });
   },
 };
