@@ -576,9 +576,15 @@ router.post('/reviews', requireAdmin, async (req, res) => {
   }
 });
 
+// Test route to verify admin routing works
+router.get('/test', (req, res) => {
+  res.json({ status: 'Admin routes working', timestamp: new Date().toISOString() });
+});
+
 // Individual admin pages
 router.get('/categories', requireAdmin, async (req, res) => {
   try {
+    console.log('📁 Admin categories page accessed');
     const categories = await prisma.category.findMany({
       orderBy: { createdAt: 'desc' }
     });
@@ -687,6 +693,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
 
 router.get('/products', requireAdmin, async (req, res) => {
   try {
+    console.log('🛍️ Admin products page accessed');
     const categories = await prisma.category.findMany({
       include: {
         products: {

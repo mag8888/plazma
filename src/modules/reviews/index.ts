@@ -6,9 +6,7 @@ import { logUserAction } from '../../services/user-history.js';
 
 export const reviewsModule: BotModule = {
   async register(bot: Telegraf<Context>) {
-    console.log('⭐ Registering reviews module...');
     bot.hears(['Отзывы', '⭐ Отзывы'], async (ctx) => {
-      console.log('⭐ Reviews button pressed by user:', ctx.from?.id, ctx.message?.text);
       await logUserAction(ctx, 'menu:reviews');
       const reviews = await getActiveReviews();
 
