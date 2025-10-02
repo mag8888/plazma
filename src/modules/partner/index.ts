@@ -36,9 +36,9 @@ const cardTemplate = (params: {
   referral?: string;
   transactions: string[];
 }) => `🧾 Карточка клиента (личный кабинет)
-	•	💰 Баланс: [${params.balance} ₽]
+	•	💰 Баланс: [${params.balance} PZ]
 	•	👥 Партнёры: [${params.partners}]
-	•	🎁 Бонусы: [${params.bonus} ₽]
+	•	🎁 Бонусы: [${params.bonus} PZ]
 ${params.transactions.length ? `	•	📊 История начислений: [список транзакций]\n${params.transactions.join('\n')}` : '	•	📊 История начислений: [список транзакций]'}`;
 
 const directPlanText = `(на кнопку 25%) Прямая комиссия — 25%
@@ -93,7 +93,7 @@ async function showDashboard(ctx: Context) {
   const transactions = profile.transactions.map((tx) => {
     const sign = tx.type === 'CREDIT' ? '+' : '-';
     const amount = Number(tx.amount).toFixed(2);
-    return `${sign}${amount} ₽ — ${tx.description}`;
+    return `${sign}${amount} PZ — ${tx.description}`;
   });
 
   // Calculate total balance (balance + bonus)
