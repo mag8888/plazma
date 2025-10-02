@@ -42,7 +42,6 @@ type NavigationItem = {
 
 const NAVIGATION_ACTION_PREFIX = 'nav:menu:';
 const SWITCH_TO_CLASSIC_ACTION = 'nav:mode:classic';
-const APP_MODE_TRIGGERS = ['🧭 Приложение', '📱 Приложение', 'Приложение', 'Современный интерфейс', '🧭 Навигация'];
 const DEFAULT_UI_MODE: UiMode = 'classic';
 const WELCOME_VIDEO_URL = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
 
@@ -188,13 +187,6 @@ async function renderHome(ctx: Context) {
   }
 }
 
-async function enterAppInterface(ctx: Context) {
-  setUiMode(ctx, 'app');
-  await sendAppHome(ctx, {
-    introText: '📱 Современный интерфейс активирован. Выберите раздел ниже.',
-    includeGreeting: false,
-  });
-}
 
 async function exitAppInterface(ctx: Context) {
   setUiMode(ctx, 'classic');
@@ -306,7 +298,6 @@ export function mainKeyboard() {
     ['🛒 Магазин', '🛍️ Корзина'],
     ['💰 Партнёрка'],
     ['⭐ Отзывы', 'ℹ️ О нас'],
-    ['🧭 Приложение'],
   ]).resize();
 }
 
@@ -413,10 +404,6 @@ export const navigationModule: BotModule = {
       await renderHome(ctx);
     });
 
-    bot.hears(APP_MODE_TRIGGERS, async (ctx) => {
-      await logUserAction(ctx, 'ui:mode_app');
-      await enterAppInterface(ctx);
-    });
 
 
     bot.action('nav:more', async (ctx) => {
