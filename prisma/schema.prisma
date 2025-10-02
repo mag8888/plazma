@@ -17,6 +17,11 @@ enum TransactionType {
   DEBIT
 }
 
+enum Region {
+  RUSSIA
+  BALI
+}
+
 model User {
   id            String          @id @default(auto()) @map("_id") @db.ObjectId
   telegramId    String          @unique
@@ -25,6 +30,7 @@ model User {
   username      String?
   languageCode  String?
   phone         String?
+  selectedRegion Region?        @default(RUSSIA)
   cartItems     CartItem[]
   histories     UserHistory[]
   partner       PartnerProfile?
@@ -61,6 +67,8 @@ model Product {
   imageUrl         String?
   price            Float
   isActive         Boolean     @default(true)
+  availableInRussia Boolean   @default(true)
+  availableInBali  Boolean    @default(true)
   category         Category    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId       String     @db.ObjectId
   cartItems        CartItem[]
