@@ -3,7 +3,7 @@ import { PartnerProgramType } from '@prisma/client';
 import { Context } from '../../bot/context.js';
 import { BotModule } from '../../bot/types.js';
 import { ensureUser, logUserAction } from '../../services/user-history.js';
-import { buildReferralLink, getOrCreatePartnerProfile, getPartnerDashboard } from '../../services/partner-service.js';
+import { buildReferralLink, getOrCreatePartnerProfile, getPartnerDashboard, getPartnerList } from '../../services/partner-service.js';
 
 const DASHBOARD_ACTION = 'partner:dashboard';
 const DIRECT_PLAN_ACTION = 'partner:plan:direct';
@@ -145,8 +145,38 @@ async function showPartners(ctx: Context) {
   }
 
   const { stats } = dashboard;
+  const partnerList = await getPartnerList(user.id);
+  
   await ctx.answerCbQuery();
-  await ctx.reply(`👥 Мои партнёры\nВсего: ${stats.partners}\nПрямых: ${stats.directPartners}`);
+  
+  let message = `👥 Мои партнёры\n\n📊 Статистика:\nВсего: ${stats.partners}\nПрямых: ${stats.directPartners}\n\n`;
+  
+  if (partnerList) {
+    // Show direct partners
+    if (partnerList.directPartners.length > 0) {
+      message += `🎯 Прямые партнёры (1-й уровень):\n`;
+      partnerList.directPartners.forEach((partner, index) => {
+        const displayName = partner.username ? `@${partner.username}` : partner.firstName || `ID:${partner.telegramId}`;
+        message += `${index + 1}. ${displayName}\n`;
+      });
+      message += '\n';
+    }
+    
+    // Show multi-level partners
+    if (partnerList.multiPartners.length > 0) {
+      message += `🌳 Многоуровневые партнёры:\n`;
+      partnerList.multiPartners.forEach((partner, index) => {
+        const displayName = partner.username ? `@${partner.username}` : partner.firstName || `ID:${partner.telegramId}`;
+        message += `${index + 1}. ${displayName} (${partner.level}-й уровень)\n`;
+      });
+    }
+    
+    if (partnerList.directPartners.length === 0 && partnerList.multiPartners.length === 0) {
+      message += `📭 Пока нет партнёров.\nПриглашайте друзей по вашей реферальной ссылке!`;
+    }
+  }
+  
+  await ctx.reply(message);
 }
 
 async function showPartnersByLevel(ctx: Context, level: number) {

@@ -26,7 +26,9 @@ const introDetails = `✨ Plazma Water — это источник энерги�
 🔥 Один продукт — десятки применений: для энергии, здоровья, красоты и гармонии.
 Попробуйте и убедитесь сами — результат ощущается уже после первых дней.`;
 
-type MenuStats = Partial<Record<'shop' | 'cart' | 'reviews' | 'partner', string>>;
+type MenuStats = Partial<Record<'shop' | 'cart' | 'reviews', string>>;
+
+type UiMode = 'classic' | 'app';
 
 type NavigationItem = {
   id: string;
@@ -39,6 +41,10 @@ type NavigationItem = {
 };
 
 const NAVIGATION_ACTION_PREFIX = 'nav:menu:';
+const SWITCH_TO_CLASSIC_ACTION = 'nav:mode:classic';
+const APP_MODE_TRIGGERS = ['🧭 Приложение', '📱 Приложение', 'Приложение', 'Современный интерфейс', '🧭 Навигация'];
+const DEFAULT_UI_MODE: UiMode = 'classic';
+const WELCOME_VIDEO_URL = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
 
 async function showSupport(ctx: Context) {
   await ctx.reply(
@@ -118,6 +124,83 @@ const navigationItems: NavigationItem[] = [
   },
 ];
 
+function getUiMode(ctx: Context): UiMode {
+  const mode = ctx.session?.uiMode;
+  if (mode === 'app' || mode === 'classic') {
+    return mode;
+  }
+
+  ctx.session.uiMode = DEFAULT_UI_MODE;
+  return DEFAULT_UI_MODE;
+}
+
+function setUiMode(ctx: Context, mode: UiMode) {
+  ctx.session.uiMode = mode;
+}
+
+async function sendWelcomeVideo(ctx: Context) {
+  await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.', {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: '🎥 Смотреть видео',
+            url: WELCOME_VIDEO_URL,
+          },
+        ],
+        [
+          {
+            text: '📖 Подробнее',
+            callback_data: 'nav:more',
+          },
+        ],
+      ],
+    },
+  });
+}
+
+async function sendClassicHome(ctx: Context) {
+  await ctx.reply(greeting, mainKeyboard());
+  await sendWelcomeVideo(ctx);
+}
+
+async function sendAppHome(
+  ctx: Context,
+  options: { introText?: string; includeGreeting?: boolean } = {}
+) {
+  const { introText, includeGreeting = true } = options;
+
+  if (introText) {
+    await ctx.reply(introText, Markup.removeKeyboard());
+  } else if (includeGreeting) {
+    await ctx.reply(greeting, Markup.removeKeyboard());
+  }
+
+  await sendNavigationMenu(ctx);
+  await sendWelcomeVideo(ctx);
+}
+
+async function renderHome(ctx: Context) {
+  if (getUiMode(ctx) === 'app') {
+    await sendAppHome(ctx);
+  } else {
+    await sendClassicHome(ctx);
+  }
+}
+
+async function enterAppInterface(ctx: Context) {
+  setUiMode(ctx, 'app');
+  await sendAppHome(ctx, {
+    introText: '📱 Современный интерфейс активирован. Выберите раздел ниже.',
+    includeGreeting: false,
+  });
+}
+
+async function exitAppInterface(ctx: Context) {
+  setUiMode(ctx, 'classic');
+  await sendClassicHome(ctx);
+}
+
 function chunkArray<T>(items: T[], size: number): T[][] {
   const result: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -143,7 +226,10 @@ function buildNavigationKeyboard(stats: MenuStats) {
     return Markup.button.callback(label, `${NAVIGATION_ACTION_PREFIX}${item.id}`);
   });
 
-  return Markup.inlineKeyboard(chunkArray(buttons, 2));
+  const rows = chunkArray(buttons, 2);
+  rows.push([Markup.button.callback('⌨️ Классический режим', SWITCH_TO_CLASSIC_ACTION)]);
+
+  return Markup.inlineKeyboard(rows);
 }
 
 function formatMenuMessage(stats: MenuStats) {
@@ -220,6 +306,7 @@ export function mainKeyboard() {
     ['🛒 Магазин', '🛍️ Корзина'],
     ['💰 Партнёрка'],
     ['⭐ Отзывы', 'ℹ️ О нас'],
+    ['🧭 Приложение'],
   ]).resize();
 }
 
@@ -316,59 +403,18 @@ export const navigationModule: BotModule = {
       }
     }
 
-    await ctx.reply(greeting, mainKeyboard());
-    await sendNavigationMenu(ctx);
-
-    // Send welcome message with video button
-    const videoUrl = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
-    
-    await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.', {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: '🎥 Смотреть видео',
-              url: videoUrl,
-            },
-          ],
-          [
-            {
-              text: '📖 Подробнее',
-              callback_data: 'nav:more',
-            },
-          ],
-        ],
-      },
-    });
+    await renderHome(ctx);
     });
 
 
     bot.hears(['Меню', 'Главное меню', 'Назад'], async (ctx) => {
       await logUserAction(ctx, 'menu:main');
-      await ctx.reply(greeting, mainKeyboard());
-      await sendNavigationMenu(ctx);
-      
-      // Send welcome message with video button
-      const videoUrl = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
-      
-      await ctx.reply('✨ Plazma Water — это источник энергии нового поколения.', {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: '🎥 Смотреть видео',
-                url: videoUrl,
-              },
-            ],
-            [
-              {
-                text: '📖 Подробнее',
-                callback_data: 'nav:more',
-              },
-            ],
-          ],
-        },
-      });
+      await renderHome(ctx);
+    });
+
+    bot.hears(APP_MODE_TRIGGERS, async (ctx) => {
+      await logUserAction(ctx, 'ui:mode_app');
+      await enterAppInterface(ctx);
     });
 
 
@@ -391,6 +437,12 @@ export const navigationModule: BotModule = {
         }
       });
     }
+
+    bot.action(SWITCH_TO_CLASSIC_ACTION, async (ctx) => {
+      await ctx.answerCbQuery();
+      await logUserAction(ctx, 'ui:mode_classic', { source: 'navigation-card' });
+      await exitAppInterface(ctx);
+    });
 
     // Handle "О нас" button
     bot.hears(['ℹ️ О нас'], async (ctx) => {

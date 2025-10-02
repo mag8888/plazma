@@ -49,7 +49,11 @@ async function bootstrap() {
       handlerTimeout: 30_000,
     });
 
-    bot.use(telegrafSession<SessionData, Context>({ defaultSession: (): SessionData => ({}) }));
+    bot.use(
+      telegrafSession<SessionData, Context>({
+        defaultSession: (): SessionData => ({ uiMode: 'classic' }),
+      })
+    );
     await applyBotModules(bot);
     
     // Register cart actions

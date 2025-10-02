@@ -69,6 +69,65 @@ export async function getPartnerDashboard(userId: string) {
   };
 }
 
+export async function getPartnerList(userId: string) {
+  const profile = await prisma.partnerProfile.findUnique({
+    where: { userId },
+  });
+
+  if (!profile) return null;
+
+  // Get direct partners (level 1)
+  const directPartners = await prisma.partnerReferral.findMany({
+    where: { 
+      profileId: profile.id, 
+      level: 1 
+    },
+    include: {
+      profile: {
+        include: {
+          user: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  // Get multi-level partners (level 2 and 3)
+  const multiPartners = await prisma.partnerReferral.findMany({
+    where: { 
+      profileId: profile.id, 
+      level: { gt: 1 }
+    },
+    include: {
+      profile: {
+        include: {
+          user: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  return {
+    directPartners: directPartners.map(ref => ({
+      id: ref.profile.user.id,
+      firstName: ref.profile.user.firstName || 'Пользователь',
+      username: ref.profile.user.username,
+      telegramId: ref.profile.user.telegramId,
+      level: ref.level,
+      joinedAt: ref.createdAt
+    })),
+    multiPartners: multiPartners.map(ref => ({
+      id: ref.profile.user.id,
+      firstName: ref.profile.user.firstName || 'Пользователь',
+      username: ref.profile.user.username,
+      telegramId: ref.profile.user.telegramId,
+      level: ref.level,
+      joinedAt: ref.createdAt
+    }))
+  };
+}
+
 export async function recordPartnerTransaction(profileId: string, amount: number, description: string, type: TransactionType = 'CREDIT') {
   return prisma.partnerTransaction.create({
     data: {
