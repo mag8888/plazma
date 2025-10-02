@@ -80,6 +80,12 @@ router.post('/login', (req, res) => {
 // Main admin panel
 router.get('/', requireAdmin, async (req, res) => {
   try {
+    // Calculate total balance of all partners
+    const partners = await prisma.partnerProfile.findMany({
+      select: { balance: true }
+    });
+    const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
+
     const stats = {
       categories: await prisma.category.count(),
       products: await prisma.product.count(),
@@ -87,6 +93,7 @@ router.get('/', requireAdmin, async (req, res) => {
       reviews: await prisma.review.count(),
       orders: await prisma.orderRequest.count(),
       users: await prisma.user.count(),
+      totalBalance: totalBalance,
     };
 
     res.send(`
@@ -170,6 +177,14 @@ router.get('/', requireAdmin, async (req, res) => {
             <button class="stat-card" onclick="openAdminPage('/admin/orders')">
               <div class="stat-number">${stats.orders}</div>
               <div class="stat-label">Заказы</div>
+            </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/balance')">
+              <div class="stat-number">${stats.totalBalance.toFixed(2)} PZ</div>
+              <div class="stat-label">Общий баланс</div>
+            </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/transactions')">
+              <div class="stat-number">📊</div>
+              <div class="stat-label">Транзакции</div>
             </button>
           </div>
 
@@ -803,15 +818,77 @@ router.post('/orders/:id/update-status', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
+    // Get order details to check if we need to deduct balance
+    const order = await prisma.orderRequest.findUnique({
+      where: { id },
+      include: {
+        user: {
+          include: {
+            partner: true
+          }
+        }
+      }
+    });
+
+    if (!order) {
+      return res.redirect('/admin?error=order_not_found');
+    }
+
+    // Update order status
     await prisma.orderRequest.update({
       where: { id },
       data: { status }
     });
 
-    res.redirect('/admin?success=order_updated');
+    // If status is "Completed" (отгружен), deduct balance from partner
+    if (status === 'Completed' && order.user && order.user.partner) {
+      // Calculate total amount from itemsJson
+      let totalAmount = 0;
+      try {
+        if (order.itemsJson && typeof order.itemsJson === 'string') {
+          const items = JSON.parse(order.itemsJson);
+          totalAmount = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+        } else if (typeof order.itemsJson === 'object' && Array.isArray(order.itemsJson)) {
+          totalAmount = order.itemsJson.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+        }
+      } catch (error) {
+        console.error('Error parsing order items:', error);
+        totalAmount = 0;
+      }
+      
+      // Check if partner has enough balance
+      if (order.user.partner.balance >= totalAmount) {
+        // Deduct balance
+        await prisma.partnerProfile.update({
+          where: { id: order.user.partner.id },
+          data: {
+            balance: {
+              decrement: totalAmount
+            }
+          }
+        });
+
+        // Record transaction
+        await prisma.partnerTransaction.create({
+          data: {
+            profileId: order.user.partner.id,
+            amount: -totalAmount, // Negative amount for deduction
+            type: 'DEBIT',
+            description: `Списание за заказ #${order.id}`
+          }
+        });
+
+        console.log(`Balance deducted: ${totalAmount} PZ from partner ${order.user.partner.id} for order ${id}`);
+      } else {
+        console.log(`Insufficient balance for order ${id}. Required: ${totalAmount}, Available: ${order.user.partner.balance}`);
+        // You might want to handle this case differently - maybe send an alert to admin
+      }
+    }
+
+    res.redirect('/admin/orders?success=order_updated');
   } catch (error) {
     console.error('Order status update error:', error);
-    res.redirect('/admin?error=order_update');
+    res.redirect('/admin/orders?error=order_update');
   }
 });
 
@@ -930,6 +1007,231 @@ router.post('/reviews', requireAdmin, async (req, res) => {
 // Test route to verify admin routing works
 router.get('/test', (req, res) => {
   res.json({ status: 'Admin routes working', timestamp: new Date().toISOString() });
+});
+
+// Balance management route
+router.get('/balance', requireAdmin, async (req, res) => {
+  try {
+    const partners = await prisma.partnerProfile.findMany({
+      include: {
+        user: {
+          select: { firstName: true, lastName: true, username: true, telegramId: true }
+        }
+      },
+      orderBy: { balance: 'desc' }
+    });
+
+    const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление балансами</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+          h2 { color: #333; margin-bottom: 20px; }
+          .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          .btn-success { background: #28a745; }
+          .btn-danger { background: #dc3545; }
+          .btn-warning { background: #ffc107; color: #212529; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+          .balance-positive { color: #28a745; font-weight: bold; }
+          .balance-zero { color: #6c757d; }
+          .balance-negative { color: #dc3545; font-weight: bold; }
+          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
+          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+          .form-group { margin-bottom: 15px; }
+          .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+          .form-group input { width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+          .form-inline { display: inline-block; margin-right: 10px; }
+          .total-balance { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+          .total-balance h3 { margin: 0; color: #1976d2; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>💰 Управление балансами v2.0</h2>
+          <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
+          <a href="/admin" class="btn">← Назад</a>
+          
+          <div class="total-balance">
+            <h3>💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
+          </div>
+          
+          ${req.query.success === 'balance_added' ? '<div class="alert alert-success">✅ Баланс успешно пополнен</div>' : ''}
+          ${req.query.success === 'balance_subtracted' ? '<div class="alert alert-success">✅ Баланс успешно списан</div>' : ''}
+          ${req.query.error === 'balance_operation' ? '<div class="alert alert-error">❌ Ошибка при операции с балансом</div>' : ''}
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Партнёр</th>
+                <th>Telegram ID</th>
+                <th>Баланс</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${partners.map(partner => `
+                <tr>
+                  <td>
+                    ${partner.user.firstName || ''} ${partner.user.lastName || ''}
+                    ${partner.user.username ? `(@${partner.user.username})` : ''}
+                  </td>
+                  <td>${partner.user.telegramId}</td>
+                  <td class="${partner.balance > 0 ? 'balance-positive' : partner.balance === 0 ? 'balance-zero' : 'balance-negative'}">
+                    ${partner.balance.toFixed(2)} PZ
+                  </td>
+                  <td>
+                    <form method="post" action="/admin/partners/${partner.id}/add-balance" style="display: inline;">
+                      <div class="form-inline">
+                        <input type="number" name="amount" placeholder="Сумма" step="0.01" min="0.01" required style="width: 80px;">
+                        <button type="submit" class="btn btn-success">💰+</button>
+                      </div>
+                    </form>
+                    <form method="post" action="/admin/partners/${partner.id}/subtract-balance" style="display: inline;">
+                      <div class="form-inline">
+                        <input type="number" name="amount" placeholder="Сумма" step="0.01" min="0.01" required style="width: 80px;">
+                        <button type="submit" class="btn btn-danger">💰-</button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Balance management error:', error);
+    res.status(500).send('Ошибка загрузки страницы управления балансами');
+  }
+});
+
+// Transactions history route
+router.get('/transactions', requireAdmin, async (req, res) => {
+  try {
+    const transactions = await prisma.partnerTransaction.findMany({
+      include: {
+        profile: {
+          include: {
+            user: {
+              select: { firstName: true, lastName: true, username: true, telegramId: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100 // Limit to last 100 transactions
+    });
+
+    const totalTransactions = transactions.length;
+    const totalAmount = transactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>История транзакций</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+          h2 { color: #333; margin-bottom: 20px; }
+          .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; position: sticky; top: 0; }
+          .amount-positive { color: #28a745; font-weight: bold; }
+          .amount-negative { color: #dc3545; font-weight: bold; }
+          .transaction-type { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+          .type-bonus { background: #d4edda; color: #155724; }
+          .type-referral { background: #cce5ff; color: #004085; }
+          .type-purchase { background: #fff3cd; color: #856404; }
+          .type-manual { background: #f8d7da; color: #721c24; }
+          .stats-row { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; text-align: center; }
+          .stat-item h4 { margin: 0; color: #1976d2; }
+          .stat-item p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>📊 История транзакций v2.0</h2>
+          <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
+          <a href="/admin" class="btn">← Назад</a>
+          <a href="/admin/balance" class="btn">💰 Балансы</a>
+          
+          <div class="stats-row">
+            <div class="stat-item">
+              <h4>Всего транзакций</h4>
+              <p>${totalTransactions}</p>
+            </div>
+            <div class="stat-item">
+              <h4>Общая сумма</h4>
+              <p>${totalAmount.toFixed(2)} PZ</p>
+            </div>
+            <div class="stat-item">
+              <h4>Период</h4>
+              <p>Последние 100</p>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Партнёр</th>
+                <th>Тип</th>
+                <th>Описание</th>
+                <th>Сумма</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${transactions.map(tx => `
+                <tr>
+                  <td>${new Date(tx.createdAt).toLocaleString('ru-RU')}</td>
+                  <td>
+                    ${tx.profile.user.firstName || ''} ${tx.profile.user.lastName || ''}
+                    ${tx.profile.user.username ? `(@${tx.profile.user.username})` : ''}
+                    <br><small style="color: #666;">ID: ${tx.profile.user.telegramId}</small>
+                  </td>
+                  <td>
+                    <span class="transaction-type ${
+                      tx.type === 'CREDIT' ? 'type-bonus' :
+                      tx.type === 'DEBIT' ? 'type-purchase' :
+                      'type-manual'
+                    }">${tx.type}</span>
+                  </td>
+                  <td>${tx.description || 'Нет описания'}</td>
+                  <td class="${tx.amount > 0 ? 'amount-positive' : 'amount-negative'}">
+                    ${tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)} PZ
+                  </td>
+                  <td><small style="color: #666;">${tx.id}</small></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Transactions history error:', error);
+    res.status(500).send('Ошибка загрузки истории транзакций');
+  }
 });
 
 // Partner network management
