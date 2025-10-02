@@ -132,6 +132,28 @@ router.get('/', requireAdmin, async (req, res) => {
         const usersWithStats = users.map((user: any) => {
           const partnerProfile = user.partner;
           const directPartners = partnerProfile?.referrals?.length || 0;
+          
+          // Calculate total referrals at all levels (simplified for main page)
+          function countAllReferrals(userId: string, visited = new Set()): number {
+            if (visited.has(userId)) return 0; // Prevent infinite loops
+            visited.add(userId);
+            
+            const directReferrals = users.filter(u => 
+              u.partner?.referrals?.some((ref: any) => ref.referredId === userId)
+            );
+            
+            let totalCount = directReferrals.length;
+            
+            // Recursively count referrals of referrals
+            directReferrals.forEach(ref => {
+              totalCount += countAllReferrals(ref.id, new Set(visited));
+            });
+            
+            return totalCount;
+          }
+          
+          const totalPartners = countAllReferrals(user.id);
+          
           const totalOrderSum = user.orders?.reduce((sum: number, order: any) => {
             try {
               const items = JSON.parse(order.itemsJson || '[]');
@@ -148,6 +170,7 @@ router.get('/', requireAdmin, async (req, res) => {
           return {
             ...user,
             directPartners,
+            totalPartners,
             totalOrderSum,
             balance,
             bonus,
@@ -192,7 +215,8 @@ router.get('/', requireAdmin, async (req, res) => {
                         ${user.bonus > 0 ? `<div style="font-size: 11px; color: #6c757d;">Бонусы: ${user.bonus.toFixed(2)} PZ</div>` : ''}
                       </td>
                       <td>
-                        <div class="partners-count">${user.directPartners} прямых</div>
+                        <div class="partners-count">${user.totalPartners} всего</div>
+                        ${user.directPartners > 0 ? `<div style="font-size: 11px; color: #6c757d;">${user.directPartners} прямых</div>` : ''}
                       </td>
                       <td>
                         <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
@@ -975,7 +999,7 @@ router.get('/users/:userId', requireAdmin, async (req, res) => {
 
             ${partnerProfile ? `
               <div class="section">
-                <h3>🤝 Партнёрская информация</h3>
+                <h3>🤝 Партнёрская информация (включая 2-й и 3-й уровень)</h3>
                 <div class="info-grid">
                   <div class="info-card">
                     <h4>Тип программы</h4>
@@ -1421,7 +1445,7 @@ router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
       })
     );
 
-    // Build interactive hierarchy
+    // Build interactive hierarchy with multi-level referrals
     function buildInteractiveHierarchy() {
       const rootPartners = partnersWithInviters.filter(p => !p.inviter);
       
@@ -1431,11 +1455,28 @@ router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
         const username = partner.user.username ? ` (@${partner.user.username})` : '';
         const balance = partner.balance.toFixed(2);
         
-        // Count unique referrals (avoid duplicates)
-        const uniqueReferrals = new Set(partner.referrals.map((r: any) => r.referredId).filter(Boolean));
-        const referrals = uniqueReferrals.size;
+        // Count all referrals at all levels recursively
+        function countAllReferrals(partnerId: string, visited = new Set()): number {
+          if (visited.has(partnerId)) return 0; // Prevent infinite loops
+          visited.add(partnerId);
+          
+          const directReferrals = partnersWithInviters.filter(p => 
+            p.inviter && p.inviter.id === partnerId
+          );
+          
+          let totalCount = directReferrals.length;
+          
+          // Recursively count referrals of referrals
+          directReferrals.forEach(ref => {
+            totalCount += countAllReferrals(ref.user.id, new Set(visited));
+          });
+          
+          return totalCount;
+        }
         
-        // Get direct referrals
+        const totalReferrals = countAllReferrals(partner.user.id);
+        
+        // Get direct referrals (level 1)
         const directReferrals = partnersWithInviters.filter(p => 
           p.inviter && p.inviter.id === partner.user.id
         );
@@ -1452,13 +1493,14 @@ router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
                 <span class="level-emoji">${levelEmoji}</span>
                 <span class="partner-name">${partnerName}${username}</span>
                 <span class="balance">${balance} PZ</span>
-                <span class="referrals">(${referrals} рефералов)</span>
+                <span class="referrals">(${totalReferrals} рефералов всего)</span>
+                ${directReferrals.length > 0 ? `<span class="direct-referrals" style="font-size: 11px; color: #666;">(${directReferrals.length} прямых)</span>` : ''}
               </span>
             </div>
             <div class="children" id="${childrenId}" style="display: none;">
         `;
         
-        // Add child nodes
+        // Add child nodes recursively
         directReferrals.forEach(referral => {
           node += buildPartnerNode(referral, level + 1);
         });
