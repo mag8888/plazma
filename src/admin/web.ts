@@ -481,10 +481,13 @@ router.get('/', requireAdmin, async (req, res) => {
           .form-row { display: flex; gap: 20px; margin-bottom: 15px; }
           .form-row .form-group { flex: 1; }
           .regions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
-          .regions-grid label { display: flex; align-items: center; gap: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; cursor: pointer; }
-          .regions-grid label:hover { background: #e9ecef; }
+          .regions-grid label { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f8f9fa; border-radius: 8px; cursor: pointer; border: 1px solid #e9ecef; }
+          .regions-grid label:hover { background: #eef2f6; }
+          .switch-row input { transform: scale(1.2); }
           .char-count { text-align: right; font-size: 12px; color: #6c757d; margin-top: 5px; }
           .file-info { font-size: 12px; color: #6c757d; margin-top: 5px; }
+          .image-upload { display: flex; align-items: center; gap: 12px; }
+          .image-preview { width: 120px; height: 120px; border-radius: 8px; background: #f1f3f5 center/cover no-repeat; border: 1px solid #dee2e6; }
         </style>
       </head>
       <body>
@@ -738,30 +741,30 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="form-group">
                 <label>Регионы доставки *</label>
                 <div class="regions-grid">
-                  <label><input type="checkbox" name="regions" value="moscow"> 🇷🇺 Москва</label>
-                  <label><input type="checkbox" name="regions" value="spb"> 🇷🇺 Санкт-Петербург</label>
-                  <label><input type="checkbox" name="regions" value="russia"> 🇷🇺 Вся Россия</label>
-                  <label><input type="checkbox" name="regions" value="kazakhstan"> 🇰🇿 Казахстан</label>
-                  <label><input type="checkbox" name="regions" value="belarus"> 🇧🇾 Беларусь</label>
-                  <label><input type="checkbox" name="regions" value="ukraine"> 🇺🇦 Украина</label>
+                  <label class="switch-row"><input type="checkbox" id="regionRussia" checked> 🇷🇺 Россия</label>
+                  <label class="switch-row"><input type="checkbox" id="regionBali"> 🇮🇩 Бали</label>
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Краткое описание *</label>
+                  <textarea id="productShortDescription" required placeholder="Краткое описание товара (до 200 символов)" maxlength="200" style="height: 80px;"></textarea>
+                  <div class="char-count" id="shortDescCount">0/200</div>
+                </div>
+                <div class="form-group">
+                  <label>Фото товара</label>
+                  <div class="image-upload">
+                    <div id="imagePreview" class="image-preview"></div>
+                    <input type="file" id="productImage" accept="image/*">
+                    <div class="file-info">Квадратное фото 1:1, ~800x800px, JPG/PNG</div>
+                  </div>
                 </div>
               </div>
               
               <div class="form-group">
-                <label>Краткое описание *</label>
-                <textarea id="productShortDescription" required placeholder="Краткое описание товара (до 200 символов)" maxlength="200" style="height: 80px;"></textarea>
-                <div class="char-count" id="shortDescCount">0/200</div>
-              </div>
-              
-              <div class="form-group">
                 <label>Полное описание *</label>
-                <textarea id="productFullDescription" required placeholder="Подробное описание товара" style="height: 120px;"></textarea>
-              </div>
-              
-              <div class="form-group">
-                <label>Изображение товара</label>
-                <input type="file" id="productImage" accept="image/*">
-                <div class="file-info">Рекомендуемый размер: 800x600px, формат: JPG/PNG</div>
+                <textarea id="productFullDescription" required placeholder="Подробное описание товара" style="height: 140px;"></textarea>
               </div>
               
               <div class="form-group">
@@ -1016,6 +1019,20 @@ router.get('/', requireAdmin, async (req, res) => {
                 charCount.textContent = this.value.length + '/200';
               });
             }
+
+            // Image preview
+            const imageInput = document.getElementById('productImage');
+            const imagePreview = document.getElementById('imagePreview');
+            if (imageInput && imagePreview) {
+              imageInput.addEventListener('change', function() {
+                const inputEl = this;
+                const file = inputEl && inputEl.files ? inputEl.files[0] : null;
+                if (!file) { imagePreview.style.backgroundImage = ''; return; }
+                const reader = new FileReader();
+                reader.onload = function() { imagePreview.style.backgroundImage = 'url(' + reader.result + ')'; };
+                reader.readAsDataURL(file);
+              });
+            }
           });
           
           // Product modal functions
@@ -1072,9 +1089,11 @@ router.get('/', requireAdmin, async (req, res) => {
             formData.append('fullDescription', document.getElementById('productFullDescription').value);
             formData.append('active', document.getElementById('productActive').checked);
             
-            // Get selected regions
-            const regions = Array.from(document.querySelectorAll('input[name="regions"]:checked')).map(cb => cb.value);
-            formData.append('regions', JSON.stringify(regions));
+            // Regions
+            var rrEl = document.getElementById('regionRussia');
+            var rbEl = document.getElementById('regionBali');
+            formData.append('availableInRussia', String(rrEl && rrEl['checked']));
+            formData.append('availableInBali', String(rbEl && rbEl['checked']));
             
             // Add image if selected
             const imageFile = document.getElementById('productImage').files[0];
@@ -1580,7 +1599,7 @@ router.post('/api/categories', requireAdmin, async (req, res) => {
 // API: Create product
 router.post('/api/products', requireAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { name, price, categoryId, stock, shortDescription, fullDescription, active, regions } = req.body;
+    const { name, price, categoryId, stock, shortDescription, fullDescription, active, availableInRussia, availableInBali } = req.body;
     
     // Validation
     if (!name || !name.trim()) {
@@ -1599,17 +1618,7 @@ router.post('/api/products', requireAdmin, upload.single('image'), async (req, r
       return res.status(400).json({ success: false, error: 'Полное описание обязательно' });
     }
     
-    // Parse regions
-    let regionsArray = [];
-    try {
-      regionsArray = JSON.parse(regions);
-    } catch {
-      return res.status(400).json({ success: false, error: 'Неверный формат регионов' });
-    }
-    
-    if (!Array.isArray(regionsArray) || regionsArray.length === 0) {
-      return res.status(400).json({ success: false, error: 'Выберите хотя бы один регион' });
-    }
+    // Regions parsing removed; using fixed switches on client side
     
     // Check if category exists
     const category = await prisma.category.findUnique({ where: { id: categoryId } });
@@ -1648,7 +1657,9 @@ router.post('/api/products', requireAdmin, upload.single('image'), async (req, r
         price: parseFloat(price),
         categoryId,
         imageUrl,
-        isActive: active === 'true' || active === true
+        isActive: active === 'true' || active === true,
+        availableInRussia: availableInRussia === 'true' || availableInRussia === true,
+        availableInBali: availableInBali === 'true' || availableInBali === true
       }
     });
     
