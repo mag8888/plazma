@@ -480,15 +480,30 @@ router.post('/orders/:id/delete', requireAdmin, async (req, res) => {
 // Handle product creation
 router.post('/products', requireAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { title, summary, description, price_rub, price, categoryId } = req.body;
-    
-    console.log('Product creation request body:', req.body);
-    console.log('Category ID:', categoryId);
+    const { title, summary, description, price_rub, categoryId } = req.body;
+
+    const trimmedTitle = typeof title === 'string' ? title.trim() : '';
+    const trimmedSummary = typeof summary === 'string' ? summary.trim() : '';
+    const trimmedCategoryId = typeof categoryId === 'string' ? categoryId.trim() : '';
+
+    if (!trimmedTitle || !trimmedSummary || !trimmedCategoryId) {
+      console.warn('Product creation validation failed:', { trimmedTitle, trimmedSummary, trimmedCategoryId });
+      return res.redirect('/admin?error=product_validation');
+    }
+
+    console.log('Product creation request body:', {
+      ...req.body,
+      title: trimmedTitle,
+      summary: trimmedSummary,
+      categoryId: trimmedCategoryId,
+    });
+    console.log('Category ID:', trimmedCategoryId);
     console.log('Price RUB:', price_rub);
-    
+
     // Convert RUB to PZ (1 PZ = 100 RUB)
-    const rubPrice = parseFloat(price_rub) || 0;
-    const pzPrice = rubPrice / 100;
+    const rubPriceRaw = typeof price_rub === 'string' ? price_rub.replace(',', '.').trim() : '';
+    const rubPrice = Number.parseFloat(rubPriceRaw) || 0;
+    const pzPrice = Number.isFinite(rubPrice) ? rubPrice / 100 : 0;
     
     console.log('Creating product with RUB price:', rubPrice, 'PZ price:', pzPrice);
     let imageUrl = null;
@@ -496,33 +511,38 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
     // Upload image to Cloudinary if provided
     if (req.file) {
       console.log('Uploading image to Cloudinary...');
-      const result = await new Promise<any>((resolve, reject) => {
-        cloudinary.uploader.upload_stream({
-          folder: 'plazma-bot/products',
-          transformation: [
-            { width: 800, height: 600, crop: 'fill', quality: 'auto' }
-          ]
-        }, (error, result) => {
-          if (error) {
-            console.error('Cloudinary upload error:', error);
-            reject(error);
-          } else {
-            resolve(result);
-          }
-        }).end(req.file!.buffer);
-      });
-      
-      imageUrl = result.secure_url;
-      console.log('Image uploaded:', imageUrl);
+      try {
+        const result = await new Promise<any>((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            {
+              folder: 'plazma-bot/products',
+              transformation: [{ width: 800, height: 600, crop: 'fill', quality: 'auto' }],
+            },
+            (error, result) => {
+              if (error) {
+                reject(error);
+              } else {
+                resolve(result);
+              }
+            },
+          ).end(req.file!.buffer);
+        });
+
+        imageUrl = result.secure_url;
+        console.log('Image uploaded:', imageUrl);
+      } catch (uploadError) {
+        // Continue without blocking product creation if Cloudinary is unavailable
+        console.error('Cloudinary upload error, continuing without image:', uploadError);
+      }
     }
 
     const product = await prisma.product.create({
       data: {
-        title,
-        summary,
+        title: trimmedTitle,
+        summary: trimmedSummary,
         description,
-        price: pzPrice, // Use converted PZ price
-        categoryId,
+        price: Number.isFinite(pzPrice) ? Number(pzPrice.toFixed(2)) : 0, // Use converted PZ price
+        categoryId: trimmedCategoryId,
         imageUrl,
         isActive: true
       }
@@ -667,10 +687,20 @@ router.get('/partners', requireAdmin, async (req, res) => {
 
 router.get('/products', requireAdmin, async (req, res) => {
   try {
-    const products = await prisma.product.findMany({
-      include: { category: true },
-      orderBy: { createdAt: 'desc' }
+    const categories = await prisma.category.findMany({
+      include: {
+        products: {
+          include: { category: true },
+          orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+        },
+      },
+      orderBy: { name: 'asc' },
     });
+
+    const allProducts = categories.flatMap((category) => category.products.map((product) => ({
+      ...product,
+      categoryName: category.name,
+    })));
 
     let html = `
       <!DOCTYPE html>
@@ -679,36 +709,128 @@ router.get('/products', requireAdmin, async (req, res) => {
         <title>Управление товарами</title>
         <meta charset="utf-8">
         <style>
-          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
-          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
-          .btn:hover { background: #0056b3; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-          th { background-color: #f2f2f2; }
+          body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; background: #f5f5f5; }
+          a.btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 6px; margin: 5px 0 20px; transition: background 0.2s ease; }
+          a.btn:hover { background: #0056b3; }
+          h2 { margin-top: 0; }
+          .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+          .filter-btn { padding: 8px 16px; border: none; border-radius: 999px; background: #e0e7ff; color: #1d4ed8; cursor: pointer; transition: all 0.2s ease; }
+          .filter-btn:hover { background: #c7d2fe; }
+          .filter-btn.active { background: #1d4ed8; color: #fff; box-shadow: 0 4px 10px rgba(29, 78, 216, 0.2); }
+          .product-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+          .product-card { background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); padding: 18px; display: flex; flex-direction: column; gap: 12px; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+          .product-card:hover { transform: translateY(-4px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12); }
+          .product-header { display: flex; justify-content: space-between; align-items: flex-start; }
+          .product-title { font-size: 18px; font-weight: 600; color: #111827; margin: 0; }
+          .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-block; }
+          .badge-status-active { background: #dcfce7; color: #166534; }
+          .badge-status-inactive { background: #fee2e2; color: #991b1b; }
+          .badge-category { background: #e5e7eb; color: #374151; }
+          .product-summary { color: #4b5563; font-size: 14px; line-height: 1.5; margin: 0; }
+          .product-price { font-size: 16px; font-weight: 600; color: #1f2937; }
+          .product-meta { font-size: 12px; color: #6b7280; display: flex; justify-content: space-between; }
+          .product-actions { display: flex; gap: 10px; }
+          .product-actions form { margin: 0; }
+          .product-actions button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+          .product-actions .toggle-btn { background: #fbbf24; color: #92400e; }
+          .product-actions .toggle-btn:hover { background: #f59e0b; }
+          .product-actions .delete-btn { background: #f87171; color: #7f1d1d; }
+          .product-actions .delete-btn:hover { background: #ef4444; }
+          .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
+          img.product-image { width: 100%; height: 160px; object-fit: cover; border-radius: 10px; }
         </style>
       </head>
       <body>
         <h2>🛍 Управление товарами</h2>
         <a href="/admin" class="btn">← Назад</a>
-        <table>
-                  <tr><th>Название</th><th>Цена (₽ / PZ)</th><th>Категория</th><th>Статус</th><th>Создан</th></tr>
+
+        <div class="filters">
+          <button type="button" class="filter-btn active" data-filter="all">Все категории (${allProducts.length})</button>
     `;
 
-    products.forEach(product => {
-      const rubPrice = (product.price * 100).toFixed(2);
+    categories.forEach((category) => {
       html += `
-        <tr>
-          <td>${product.title}</td>
-          <td>${rubPrice} ₽ / ${product.price} PZ</td>
-          <td>${product.category.name}</td>
-          <td>${product.isActive ? '✅ Активен' : '❌ Неактивен'}</td>
-          <td>${new Date(product.createdAt).toLocaleDateString()}</td>
-        </tr>
+          <button type="button" class="filter-btn" data-filter="${category.id}">${category.name} (${category.products.length})</button>
       `;
     });
 
     html += `
-        </table>
+        </div>
+
+        <div class="product-grid">
+    `;
+
+    if (allProducts.length === 0) {
+      html += `
+          <div class="empty-state">
+            <h3>Пока нет добавленных товаров</h3>
+            <p>Используйте форму на главной странице админки, чтобы добавить первый товар.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+      `;
+      return res.send(html);
+    }
+
+    allProducts.forEach((product) => {
+      const rubPrice = (product.price * 100).toFixed(2);
+      const priceFormatted = `${rubPrice} ₽ / ${product.price.toFixed(2)} PZ`;
+      const createdAt = new Date(product.createdAt).toLocaleDateString();
+      const imageSection = product.imageUrl
+        ? `<img src="${product.imageUrl}" alt="${product.title}" class="product-image" loading="lazy">`
+        : '';
+
+      html += `
+          <div class="product-card" data-category="${product.categoryId}">
+            ${imageSection}
+            <div class="product-header">
+              <h3 class="product-title">${product.title}</h3>
+              <span class="badge ${product.isActive ? 'badge-status-active' : 'badge-status-inactive'}">${product.isActive ? 'Активен' : 'Неактивен'}</span>
+            </div>
+            <span class="badge badge-category">${product.categoryName}</span>
+            <p class="product-summary">${product.summary}</p>
+            <div class="product-price">${priceFormatted}</div>
+            <div class="product-meta">
+              <span>Создан: ${createdAt}</span>
+              <span>ID: ${product.id.slice(0, 8)}...</span>
+            </div>
+            <div class="product-actions">
+              <form method="post" action="/admin/products/${product.id}/toggle-active">
+                <button type="submit" class="toggle-btn">${product.isActive ? 'Отключить' : 'Включить'}</button>
+              </form>
+              <form method="post" action="/admin/products/${product.id}/delete" onsubmit="return confirm('Удалить товар «${product.title}»?')">
+                <button type="submit" class="delete-btn">Удалить</button>
+              </form>
+            </div>
+          </div>
+      `;
+    });
+
+    html += `
+        </div>
+
+        <script>
+          const filterButtons = document.querySelectorAll('.filter-btn');
+          const cards = document.querySelectorAll('.product-card');
+
+          filterButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+              const filter = button.dataset.filter;
+
+              filterButtons.forEach((btn) => btn.classList.remove('active'));
+              button.classList.add('active');
+
+              cards.forEach((card) => {
+                if (filter === 'all' || card.dataset.category === filter) {
+                  card.style.display = 'flex';
+                } else {
+                  card.style.display = 'none';
+                }
+              });
+            });
+          });
+        </script>
       </body>
       </html>
     `;
