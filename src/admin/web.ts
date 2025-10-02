@@ -110,6 +110,125 @@ router.get('/', requireAdmin, async (req, res) => {
       totalBalance: totalBalance,
     };
 
+    // Helper function for detailed users section
+    async function getDetailedUsersSection() {
+      try {
+        // Get all users with their related data
+        const users = await prisma.user.findMany({
+          include: {
+            partner: {
+              include: {
+                referrals: true,
+                transactions: true
+              }
+            },
+            orders: true
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10 // Limit to 10 users for main page
+        });
+
+        // Calculate additional data for each user
+        const usersWithStats = users.map((user: any) => {
+          const partnerProfile = user.partner;
+          const directPartners = partnerProfile?.referrals?.length || 0;
+          const totalOrderSum = user.orders?.reduce((sum: number, order: any) => {
+            try {
+              const items = JSON.parse(order.itemsJson || '[]');
+              const orderTotal = items.reduce((itemSum: number, item: any) => itemSum + (item.price || 0) * (item.quantity || 1), 0);
+              return sum + orderTotal;
+            } catch {
+              return sum;
+            }
+          }, 0) || 0;
+          const balance = partnerProfile?.balance || 0;
+          const bonus = partnerProfile?.bonus || 0;
+          const lastActivity = user.updatedAt || user.createdAt;
+          
+          return {
+            ...user,
+            directPartners,
+            totalOrderSum,
+            balance,
+            bonus,
+            lastActivity
+          };
+        });
+
+        if (usersWithStats.length === 0) {
+          return '<div class="empty-state"><h3>📭 Нет пользователей</h3><p>Пользователи появятся здесь после регистрации</p></div>';
+        }
+
+        return `
+          <div class="detailed-users-container">
+            <div class="users-table-container">
+              <table class="users-table">
+                <thead>
+                  <tr>
+                    <th>Пользователь</th>
+                    <th>Баланс</th>
+                    <th>Партнёры</th>
+                    <th>Заказы</th>
+                    <th>Последняя активность</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${usersWithStats.map(user => `
+                    <tr>
+                      <td>
+                        <div class="user-info">
+                          <div class="user-avatar">${(user.firstName || 'U')[0].toUpperCase()}</div>
+                          <div class="user-details">
+                            <h4>${user.firstName || 'Без имени'} ${user.lastName || ''}</h4>
+                            <p>@${user.username || 'без username'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="balance ${user.balance > 0 ? 'positive' : 'zero'}">
+                          ${user.balance.toFixed(2)} PZ
+                        </div>
+                        ${user.bonus > 0 ? `<div style="font-size: 11px; color: #6c757d;">Бонусы: ${user.bonus.toFixed(2)} PZ</div>` : ''}
+                      </td>
+                      <td>
+                        <div class="partners-count">${user.directPartners} прямых</div>
+                      </td>
+                      <td>
+                        <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
+                        <div style="font-size: 11px; color: #6c757d;">${user.orders?.length || 0} заказов</div>
+                      </td>
+                      <td>
+                        <div style="font-size: 13px; color: #6c757d;">
+                          ${user.lastActivity.toLocaleString('ru-RU')}
+                        </div>
+                      </td>
+                      <td>
+                        ${user.partner ? `
+                          <button class="action-btn hierarchy" onclick="showHierarchy('${user.id}')">
+                            🌳 Иерархия
+                          </button>
+                        ` : ''}
+                        <button class="action-btn" onclick="showUserDetails('${user.id}')">
+                          👁 Подробно
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+              <a href="/admin/users-detailed" class="btn">📊 Полный список пользователей</a>
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        return '<div class="empty-state"><h3>❌ Ошибка загрузки</h3><p>Не удалось загрузить данные пользователей</p></div>';
+      }
+    }
+
     // Helper functions for lists
     async function getRecentUsers() {
       try {
@@ -255,6 +374,31 @@ router.get('/', requireAdmin, async (req, res) => {
           .list-amount { font-weight: bold; color: #28a745; }
           .list-amount.negative { color: #dc3545; }
           .empty-list { text-align: center; color: #6c757d; padding: 20px; }
+          
+          /* Detailed Users Table Styles */
+          .detailed-users-container { margin: 20px 0; }
+          .users-table-container { overflow-x: auto; }
+          .users-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          .users-table th { background: #f8f9fa; padding: 15px 12px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
+          .users-table td { padding: 15px 12px; border-bottom: 1px solid #dee2e6; vertical-align: top; }
+          .users-table tr:hover { background: #f8f9fa; }
+          
+          .user-info { display: flex; align-items: center; gap: 12px; }
+          .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px; }
+          .user-details h4 { margin: 0; font-size: 16px; color: #212529; }
+          .user-details p { margin: 2px 0 0 0; font-size: 13px; color: #6c757d; }
+          
+          .balance { font-weight: bold; font-size: 16px; }
+          .balance.positive { color: #28a745; }
+          .balance.zero { color: #6c757d; }
+          
+          .partners-count { background: #e3f2fd; color: #1976d2; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+          .orders-sum { background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+          
+          .action-btn { background: #007bff; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 2px; }
+          .action-btn:hover { background: #0056b3; }
+          .action-btn.hierarchy { background: #28a745; }
+          .action-btn.hierarchy:hover { background: #1e7e34; }
         </style>
       </head>
       <body>
@@ -311,6 +455,13 @@ router.get('/', requireAdmin, async (req, res) => {
             <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
               <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${stats.totalBalance.toFixed(2)} PZ</h3>
             </div>
+
+            <!-- Detailed Users Section -->
+            <div class="section-header">
+              <h2 class="section-title">👥 Детальная информация о пользователях</h2>
+            </div>
+            
+            ${await getDetailedUsersSection()}
 
             <!-- Recent Data Lists -->
             <div class="recent-lists">
@@ -417,6 +568,14 @@ router.get('/', requireAdmin, async (req, res) => {
             
             // Add active class to clicked tab
             event.target.classList.add('active');
+          }
+          
+          function showHierarchy(userId) {
+            window.open(\`/admin/partners-hierarchy?user=\${userId}\`, '_blank', 'width=800,height=600');
+          }
+          
+          function showUserDetails(userId) {
+            window.open(\`/admin/users/\${userId}\`, '_blank', 'width=600,height=400');
           }
         </script>
       </body>
