@@ -2658,7 +2658,21 @@ router.get('/products', requireAdmin, async (req, res) => {
               <span>ID: ${product.id.slice(0, 8)}...</span>
             </div>
             <div class="product-actions">
-              <button type="button" class="edit-btn" onclick="editProductUsingCreateModal('${product.id}')">✏️ Редактировать</button>
+              <button 
+                type="button" 
+                class="edit-btn"
+                data-id="${product.id}"
+                data-title="${product.title.replace(/"/g, '&quot;')}"
+                data-summary="${(product.summary || '').replace(/"/g, '&quot;')}"
+                data-description="${(product.description || '').replace(/"/g, '&quot;')}"
+                data-price="${product.price}"
+                data-category-id="${product.categoryId}"
+                data-active="${product.isActive ? 'true' : 'false'}"
+                data-russia="${(product as any).availableInRussia ? 'true' : 'false'}"
+                data-bali="${(product as any).availableInBali ? 'true' : 'false'}"
+                data-image="${product.imageUrl || ''}"
+                onclick="editProductUsingCreateModal(this)"
+              >✏️ Редактировать</button>
               <form method="post" action="/admin/products/${product.id}/toggle-active">
                 <button type="submit" class="toggle-btn">${product.isActive ? 'Отключить' : 'Включить'}</button>
               </form>
