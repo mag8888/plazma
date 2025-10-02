@@ -237,7 +237,7 @@ export const partnerModule: BotModule = {
       console.log('💰 Partner: Button pressed');
       await logUserAction(ctx, 'menu:partners');
       console.log('💰 Partner: Sending program intro');
-      await ctx.reply(programIntro, planKeyboard());
+      await showPartnerIntro(ctx);
     });
 
     bot.action(DASHBOARD_ACTION, async (ctx) => {
@@ -293,3 +293,7 @@ export const partnerModule: BotModule = {
     });
   },
 };
+
+export async function showPartnerIntro(ctx: Context) {
+  await ctx.reply(programIntro, planKeyboard());
+}

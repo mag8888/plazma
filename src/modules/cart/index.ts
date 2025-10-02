@@ -14,7 +14,7 @@ export const cartModule: BotModule = {
   },
 };
 
-async function showCart(ctx: Context) {
+export async function showCart(ctx: Context) {
   try {
     console.log('🛍️ Cart: Starting showCart function');
     const userId = ctx.from?.id?.toString();

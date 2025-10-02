@@ -26,6 +26,187 @@ const introDetails = `✨ Plazma Water — это источник энерги�
 🔥 Один продукт — десятки применений: для энергии, здоровья, красоты и гармонии.
 Попробуйте и убедитесь сами — результат ощущается уже после первых дней.`;
 
+type MenuStats = Partial<Record<'shop' | 'cart' | 'reviews' | 'partner', string>>;
+
+type NavigationItem = {
+  id: string;
+  title: string;
+  emoji: string;
+  description: string;
+  badgeKey?: keyof MenuStats;
+  defaultBadge?: string;
+  handler: (ctx: Context) => Promise<void>;
+};
+
+const NAVIGATION_ACTION_PREFIX = 'nav:menu:';
+
+async function showSupport(ctx: Context) {
+  await ctx.reply(
+    '💬 Служба поддержки\n\nНапишите свой вопрос прямо в этот чат — команда Plazma Water ответит как можно быстрее.\n\nЕсли нужен срочный контакт, оставьте номер телефона, и мы перезвоним.'
+  );
+}
+
+const navigationItems: NavigationItem[] = [
+  {
+    id: 'shop',
+    title: 'Магазин',
+    emoji: '🛒',
+    description: 'Каталог продукции и сезонные наборы',
+    badgeKey: 'shop',
+    handler: async (ctx) => {
+      const { showRegionSelection } = await import('../shop/index.js');
+      await showRegionSelection(ctx);
+    },
+  },
+  {
+    id: 'cart',
+    title: 'Корзина',
+    emoji: '🧺',
+    description: 'Выбранные товары и оформление заказа',
+    badgeKey: 'cart',
+    handler: async (ctx) => {
+      const { showCart } = await import('../cart/index.js');
+      await showCart(ctx);
+    },
+  },
+  {
+    id: 'partner',
+    title: 'Партнёрка',
+    emoji: '🤝',
+    description: 'Реферальные бонусы и личный кабинет',
+    handler: async (ctx) => {
+      const { showPartnerIntro } = await import('../partner/index.js');
+      await showPartnerIntro(ctx);
+    },
+  },
+  {
+    id: 'reviews',
+    title: 'Отзывы',
+    emoji: '⭐',
+    description: 'Истории сообщества и результаты клиентов',
+    badgeKey: 'reviews',
+    handler: async (ctx) => {
+      const { showReviews } = await import('../reviews/index.js');
+      await showReviews(ctx);
+    },
+  },
+  {
+    id: 'about',
+    title: 'О нас',
+    emoji: 'ℹ️',
+    description: 'Миссия, технологии и команда Plazma Water',
+    handler: async (ctx) => {
+      const { showAbout } = await import('../about/index.js');
+      await showAbout(ctx);
+    },
+  },
+  {
+    id: 'support',
+    title: 'Поддержка',
+    emoji: '💬',
+    description: 'Ответим на вопросы и поможем с заказом',
+    defaultBadge: '24/7',
+    handler: showSupport,
+  },
+];
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size));
+  }
+  return result;
+}
+
+function getBadge(stats: MenuStats, item: NavigationItem) {
+  if (item.badgeKey) {
+    const value = stats[item.badgeKey];
+    if (value) {
+      return value;
+    }
+  }
+  return item.defaultBadge;
+}
+
+function buildNavigationKeyboard(stats: MenuStats) {
+  const buttons = navigationItems.map((item) => {
+    const badge = getBadge(stats, item);
+    const label = `${item.emoji} ${item.title}${badge ? ` • ${badge}` : ''}`;
+    return Markup.button.callback(label, `${NAVIGATION_ACTION_PREFIX}${item.id}`);
+  });
+
+  return Markup.inlineKeyboard(chunkArray(buttons, 2));
+}
+
+function formatMenuMessage(stats: MenuStats) {
+  const header = '🧭 <b>Навигация и сервисы</b>\n[ 🔍 Поиск по разделам ]';
+
+  const body = navigationItems
+    .map((item) => {
+      const badge = getBadge(stats, item);
+      const lines = [`• <b>${item.emoji} ${item.title}</b>${badge ? ` <code>${badge}</code>` : ''}`, `  ${item.description}`];
+      return lines.join('\n');
+    })
+    .join('\n\n');
+
+  const footer = '👇 Нажмите на карточку, чтобы перейти в нужный раздел.';
+
+  return `${header}\n\n${body}\n\n${footer}`;
+}
+
+async function collectMenuStats(ctx: Context): Promise<MenuStats> {
+  const stats: MenuStats = {};
+
+  try {
+    const [{ getActiveCategories }, { getActiveReviews }] = await Promise.all([
+      import('../../services/shop-service.js'),
+      import('../../services/review-service.js'),
+    ]);
+
+    const [categories, reviews] = await Promise.all([
+      getActiveCategories().catch(() => []),
+      getActiveReviews().catch(() => []),
+    ]);
+
+    if (categories.length > 0) {
+      stats.shop = String(categories.length);
+    }
+
+    if (reviews.length > 0) {
+      stats.reviews = String(reviews.length);
+    }
+  } catch (error) {
+    console.warn('🧭 Navigation: Failed to collect shared stats', error);
+  }
+
+  const userId = ctx.from?.id?.toString();
+  if (userId) {
+    try {
+      const { getCartItems } = await import('../../services/cart-service.js');
+      const cartItems = await getCartItems(userId);
+      const totalQuantity = cartItems.reduce((sum, item) => sum + (item.quantity ?? 0), 0);
+      if (totalQuantity > 0) {
+        stats.cart = String(totalQuantity);
+      }
+    } catch (error) {
+      console.warn('🧭 Navigation: Failed to collect cart stats', error);
+    }
+  }
+
+  return stats;
+}
+
+async function sendNavigationMenu(ctx: Context) {
+  const stats = await collectMenuStats(ctx);
+  const message = formatMenuMessage(stats);
+  const keyboard = buildNavigationKeyboard(stats);
+
+  await ctx.reply(message, {
+    parse_mode: 'HTML',
+    ...keyboard,
+  });
+}
+
 export function mainKeyboard() {
   return Markup.keyboard([
     ['🛒 Магазин', '🛍️ Корзина'],
@@ -128,6 +309,7 @@ export const navigationModule: BotModule = {
     }
 
     await ctx.reply(greeting, mainKeyboard());
+    await sendNavigationMenu(ctx);
 
     // Send welcome message with video button
     const videoUrl = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
@@ -156,6 +338,7 @@ export const navigationModule: BotModule = {
     bot.hears(['Меню', 'Главное меню', 'Назад'], async (ctx) => {
       await logUserAction(ctx, 'menu:main');
       await ctx.reply(greeting, mainKeyboard());
+      await sendNavigationMenu(ctx);
       
       // Send welcome message with video button
       const videoUrl = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
@@ -186,6 +369,20 @@ export const navigationModule: BotModule = {
       await logUserAction(ctx, 'cta:detailed-intro');
       await ctx.reply(introDetails);
     });
+
+    for (const item of navigationItems) {
+      bot.action(`${NAVIGATION_ACTION_PREFIX}${item.id}`, async (ctx) => {
+        await ctx.answerCbQuery();
+        await logUserAction(ctx, `menu:${item.id}`, { source: 'navigation-card' });
+
+        try {
+          await item.handler(ctx);
+        } catch (error) {
+          console.error(`🧭 Navigation: Failed to open section ${item.id}`, error);
+          await ctx.reply('❌ Не удалось открыть раздел. Попробуйте позже.');
+        }
+      });
+    }
 
     // Handle "О нас" button
     bot.hears(['ℹ️ О нас'], async (ctx) => {
