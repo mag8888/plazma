@@ -678,6 +678,10 @@ router.get('/categories', requireAdmin, async (req, res) => {
           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
           th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
           th { background-color: #f2f2f2; }
+          .status-btn { transition: all 0.2s ease; }
+          .status-btn:hover { transform: scale(1.1); }
+          .status-btn.active { color: #28a745; }
+          .status-btn.inactive { color: #dc3545; }
         </style>
       </head>
       <body>
@@ -693,7 +697,13 @@ router.get('/categories', requireAdmin, async (req, res) => {
           <td>${cat.id.substring(0, 8)}...</td>
           <td>${cat.name}</td>
           <td>${cat.slug}</td>
-          <td>${cat.isActive ? '✅ Активна' : '❌ Неактивна'}</td>
+          <td>
+            <form method="post" action="/admin/categories/${cat.id}/toggle-active" style="display: inline;">
+              <button type="submit" class="status-btn ${cat.isActive ? 'active' : 'inactive'}" style="border: none; background: none; cursor: pointer; font-size: 16px;">
+                ${cat.isActive ? '✅ Активна' : '❌ Неактивна'}
+              </button>
+            </form>
+          </td>
           <td>${new Date(cat.createdAt).toLocaleDateString()}</td>
         </tr>
       `;
@@ -808,6 +818,10 @@ router.get('/products', requireAdmin, async (req, res) => {
           .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-block; }
           .badge-status-active { background: #dcfce7; color: #166534; }
           .badge-status-inactive { background: #fee2e2; color: #991b1b; }
+          .status-btn { transition: all 0.2s ease; }
+          .status-btn:hover { transform: scale(1.1); }
+          .status-btn.active { color: #28a745; }
+          .status-btn.inactive { color: #dc3545; }
           .badge-category { background: #e5e7eb; color: #374151; }
           .product-summary { color: #4b5563; font-size: 14px; line-height: 1.5; margin: 0; }
           .product-price { font-size: 16px; font-weight: 600; color: #1f2937; }
@@ -869,7 +883,11 @@ router.get('/products', requireAdmin, async (req, res) => {
             ${imageSection}
             <div class="product-header">
               <h3 class="product-title">${product.title}</h3>
-              <span class="badge ${product.isActive ? 'badge-status-active' : 'badge-status-inactive'}">${product.isActive ? 'Активен' : 'Неактивен'}</span>
+              <form method="post" action="/admin/products/${product.id}/toggle-active" style="display: inline;">
+                <button type="submit" class="status-btn ${product.isActive ? 'active' : 'inactive'}" style="border: none; background: none; cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 4px;">
+                  ${product.isActive ? '✅ Активен' : '❌ Неактивен'}
+                </button>
+              </form>
             </div>
             <span class="badge badge-category">${product.categoryName}</span>
             <p class="product-summary">${product.summary}</p>
