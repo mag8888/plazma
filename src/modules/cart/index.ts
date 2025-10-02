@@ -17,17 +17,19 @@ export const cartModule: BotModule = {
 async function showCart(ctx: Context) {
   try {
     console.log('🛍️ Cart: Starting showCart function');
-    const userId = ctx.from?.id?.toString();
-    console.log('🛍️ Cart: User ID:', userId);
     
-    if (!userId) {
-      console.log('🛍️ Cart: No user ID found');
+    // Ensure user exists and get proper user ID
+    const { ensureUser } = await import('../../services/user-history.js');
+    const user = await ensureUser(ctx);
+    
+    if (!user) {
+      console.log('🛍️ Cart: Failed to ensure user');
       await ctx.reply('❌ Ошибка: не удалось определить пользователя');
       return;
     }
 
-    console.log('🛍️ Cart: Getting cart items for user:', userId);
-    const cartItems = await getCartItems(userId);
+    console.log('🛍️ Cart: Getting cart items for user:', user.id);
+    const cartItems = await getCartItems(user.id);
     console.log('🛍️ Cart: Found cart items:', cartItems.length);
     
     if (cartItems.length === 0) {
@@ -144,13 +146,16 @@ export function registerCartActions(bot: Telegraf<Context>) {
     await ctx.answerCbQuery();
     await logUserAction(ctx, 'cart:clear');
     
-    const userId = ctx.from?.id?.toString();
-    if (!userId) {
+    // Ensure user exists and get proper user ID
+    const { ensureUser } = await import('../../services/user-history.js');
+    const user = await ensureUser(ctx);
+    
+    if (!user) {
       await ctx.reply('❌ Ошибка: не удалось определить пользователя');
       return;
     }
 
-    await clearCart(userId);
+    await clearCart(user.id);
     await ctx.reply('🗑️ Корзина очищена');
   });
 
@@ -159,31 +164,61 @@ export function registerCartActions(bot: Telegraf<Context>) {
     await ctx.answerCbQuery();
     await logUserAction(ctx, 'cart:checkout');
     
-    const userId = ctx.from?.id?.toString();
-    if (!userId) {
+    // Ensure user exists and get proper user ID
+    const { ensureUser } = await import('../../services/user-history.js');
+    const user = await ensureUser(ctx);
+    
+    if (!user) {
       await ctx.reply('❌ Ошибка: не удалось определить пользователя');
       return;
     }
 
     try {
-      const cartItems = await getCartItems(userId);
+      const cartItems = await getCartItems(user.id);
       
       if (cartItems.length === 0) {
         await ctx.reply('🛍️ Ваша корзина пуста');
         return;
       }
 
+      // Calculate totals
+      const total = cartItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+      const totalRub = (total * 100).toFixed(2);
+      const totalPz = total.toFixed(2);
+
+      // Get user's PZ balance
+      const { prisma } = await import('../../lib/prisma.js');
+      const partnerProfile = await prisma.partnerProfile.findUnique({
+        where: { userId: user.id }
+      });
+      const userBalance = partnerProfile ? partnerProfile.balance : 0;
+
+      // Build detailed order message
       const cartText = cartItemsToText(cartItems);
-      const orderText = `🛍️ Новый заказ от ${ctx.from?.first_name || 'Пользователь'}\n\n${cartText}\n\n📞 Свяжитесь с покупателем: @${ctx.from?.username || 'нет username'}`;
+      const orderText = `🛍️ НОВЫЙ ЗАКАЗ
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 Покупатель: ${ctx.from?.first_name || 'Пользователь'} ${ctx.from?.last_name || ''}
+🆔 Telegram ID: ${ctx.from?.id}
+📱 Username: @${ctx.from?.username || 'не указан'}
+
+📦 Товары в заказе:
+${cartText}
+
+💰 Сумма заказа: ${totalRub} ₽ / ${totalPz} PZ
+💳 Баланс покупателя: ${userBalance.toFixed(2)} PZ
+
+📞 Свяжитесь с покупателем для оформления заказа`;
 
       // Send order to admin
       const { env } = await import('../../config/env.js');
       if (env.adminChatId) {
         await ctx.telegram.sendMessage(env.adminChatId, orderText);
+        console.log('📧 Order sent to admin:', env.adminChatId);
       }
       
       // Clear cart after successful order
-      await clearCart(userId);
+      await clearCart(user.id);
       
       await ctx.reply('✅ Заказ отправлен! Мы свяжемся с вами в ближайшее время.');
     } catch (error) {
@@ -199,15 +234,18 @@ export function registerCartActions(bot: Telegraf<Context>) {
     
     const match = ctx.match as RegExpExecArray;
     const productId = match[1];
-    const userId = ctx.from?.id?.toString();
     
-    if (!userId) {
+    // Ensure user exists and get proper user ID
+    const { ensureUser } = await import('../../services/user-history.js');
+    const user = await ensureUser(ctx);
+    
+    if (!user) {
       await ctx.reply('❌ Ошибка: не удалось определить пользователя');
       return;
     }
 
     try {
-      await increaseProductQuantity(userId, productId);
+      await increaseProductQuantity(user.id, productId);
       await ctx.reply('✅ Количество увеличено!');
       // Refresh cart display
       await showCart(ctx);
@@ -224,15 +262,18 @@ export function registerCartActions(bot: Telegraf<Context>) {
     
     const match = ctx.match as RegExpExecArray;
     const productId = match[1];
-    const userId = ctx.from?.id?.toString();
     
-    if (!userId) {
+    // Ensure user exists and get proper user ID
+    const { ensureUser } = await import('../../services/user-history.js');
+    const user = await ensureUser(ctx);
+    
+    if (!user) {
       await ctx.reply('❌ Ошибка: не удалось определить пользователя');
       return;
     }
 
     try {
-      await decreaseProductQuantity(userId, productId);
+      await decreaseProductQuantity(user.id, productId);
       await ctx.reply('✅ Количество уменьшено!');
       // Refresh cart display
       await showCart(ctx);
@@ -249,15 +290,18 @@ export function registerCartActions(bot: Telegraf<Context>) {
     
     const match = ctx.match as RegExpExecArray;
     const productId = match[1];
-    const userId = ctx.from?.id?.toString();
     
-    if (!userId) {
+    // Ensure user exists and get proper user ID
+    const { ensureUser } = await import('../../services/user-history.js');
+    const user = await ensureUser(ctx);
+    
+    if (!user) {
       await ctx.reply('❌ Ошибка: не удалось определить пользователя');
       return;
     }
 
     try {
-      await removeProductFromCart(userId, productId);
+      await removeProductFromCart(user.id, productId);
       await ctx.reply('✅ Товар удален из корзины!');
       // Refresh cart display
       await showCart(ctx);
