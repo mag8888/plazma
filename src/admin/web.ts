@@ -1767,6 +1767,9 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
         <a href="/admin/partners-hierarchy" class="btn" style="background: #6f42c1;">🌳 Иерархия партнёров</a>
+        <form method="post" action="/admin/recalculate-bonuses" style="display: inline;">
+          <button type="submit" class="btn" style="background: #28a745;" onclick="return confirm('Пересчитать бонусы всех партнёров?')">🔄 Пересчитать бонусы</button>
+        </form>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -1777,8 +1780,10 @@ router.get('/partners', requireAdmin, async (req, res) => {
         ${req.query.error === 'inviter_change' ? '<div class="alert alert-error">❌ Ошибка при смене пригласителя</div>' : ''}
         ${req.query.success === 'balance_added' ? '<div class="alert alert-success">✅ Баланс успешно пополнен</div>' : ''}
         ${req.query.success === 'balance_subtracted' ? '<div class="alert alert-success">✅ Баланс успешно списан</div>' : ''}
+        ${req.query.success === 'bonuses_recalculated' ? '<div class="alert alert-success">✅ Бонусы успешно пересчитаны</div>' : ''}
         ${req.query.error === 'balance_add' ? '<div class="alert alert-error">❌ Ошибка при пополнении баланса</div>' : ''}
         ${req.query.error === 'balance_subtract' ? '<div class="alert alert-error">❌ Ошибка при списании баланса</div>' : ''}
+        ${req.query.error === 'bonus_recalculation' ? '<div class="alert alert-error">❌ Ошибка при пересчёте бонусов</div>' : ''}
         <style>
           .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px; }
           .change-inviter-btn:hover { background: #059669; }
@@ -2429,6 +2434,43 @@ router.get('/logout', (req, res) => {
   const session = req.session as any;
   session.isAdmin = false;
   res.redirect('/admin/login');
+});
+
+// Recalculate bonuses endpoint
+router.post('/recalculate-bonuses', requireAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Starting bonus recalculation...');
+    
+    // Get all partner profiles
+    const profiles = await prisma.partnerProfile.findMany();
+    
+    for (const profile of profiles) {
+      console.log(`📊 Processing profile ${profile.id}...`);
+      
+      // Calculate total bonus from transactions
+      const transactions = await prisma.partnerTransaction.findMany({
+        where: { profileId: profile.id }
+      });
+      
+      const totalBonus = transactions.reduce((sum, tx) => {
+        return sum + (tx.type === 'CREDIT' ? tx.amount : -tx.amount);
+      }, 0);
+      
+      // Update profile bonus
+      await prisma.partnerProfile.update({
+        where: { id: profile.id },
+        data: { bonus: totalBonus }
+      });
+      
+      console.log(`✅ Updated profile ${profile.id}: ${totalBonus} PZ bonus`);
+    }
+    
+    console.log('🎉 Bonus recalculation completed!');
+    res.redirect('/admin/partners?success=bonuses_recalculated');
+  } catch (error) {
+    console.error('❌ Bonus recalculation error:', error);
+    res.redirect('/admin/partners?error=bonus_recalculation');
+  }
 });
 
 export { router as adminWebRouter };
