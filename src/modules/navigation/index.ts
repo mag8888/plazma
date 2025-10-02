@@ -92,23 +92,23 @@ export const navigationModule: BotModule = {
               console.log('🔗 Referral: Sending notification to inviter:', partnerProfile.user.telegramId);
               await ctx.telegram.sendMessage(
                 partnerProfile.user.telegramId,
-                '━━━━━━━━━━━━━━━━━━━━━━━━\n🎉 Ваш счет пополнен на 3🪙PZ, приглашайте больше друзей и получайте продукцию за бонусы!\n━━━━━━━━━━━━━━━━━━━━━━━━'
+                '🎉 Ваш счет пополнен на 3PZ, приглашайте больше друзей и получайте продукцию за бонусы!'
               );
               console.log('🔗 Referral: Notification sent successfully');
             } catch (error) {
               console.warn('🔗 Referral: Failed to send notification to inviter:', error);
             }
             
-            const programText = programType === 'DIRECT' 
-              ? 'прямой программе (25% с покупок)'
-              : 'многоуровневой программе (15% + 5% + 5%)';
-              
-            const bonusText = `\n\n💡 Условия бонуса:
-• Ваш бонус 10%
-• Бонус ${programType === 'DIRECT' ? '25%' : '15%+5%+5%'} начнет действовать при Вашей активности 200PZ в месяц`;
-              
           console.log('🔗 Referral: Sending welcome message with bonus info');
-          await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!${bonusText}`);
+          await ctx.reply(`👋 Добро пожаловать!
+
+🎉 Вас пригласил ${partnerProfile.user.firstName || 'партнёр'}
+
+✨ Plazma Water — жидкие витамины и минералы в наноформе.
+💧 Усвоение — до 99,9% (в отличие от таблеток 1–10%).
+⚡ Быстро, легко и без нагрузки на печень и почки — питание прямо в клетки.
+
+Хотите узнать больше? 👇`);
           console.log('🔗 Referral: Welcome message sent');
           
           await logUserAction(ctx, 'partner:referral_joined', {
@@ -117,23 +117,17 @@ export const navigationModule: BotModule = {
             programType
           });
           console.log('🔗 Referral: User action logged');
-          
-          // Send main greeting for referral users
-          await ctx.reply(greeting, mainKeyboard());
         } else {
           console.log('🔗 Referral: Partner profile not found for code:', referralCode);
           await ctx.reply('❌ Реферальная ссылка недействительна. Партнёр не найден.');
-          await ctx.reply(greeting, mainKeyboard());
         }
       } catch (error) {
         console.error('🔗 Referral: Error processing referral:', error);
         await ctx.reply('❌ Ошибка при обработке реферальной ссылки. Попробуйте позже.');
-        await ctx.reply(greeting, mainKeyboard());
       }
-    } else {
-      // Regular start command (no referral)
-      await ctx.reply(greeting, mainKeyboard());
     }
+
+    await ctx.reply(greeting, mainKeyboard());
 
     // Send welcome message with video button
     const videoUrl = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';

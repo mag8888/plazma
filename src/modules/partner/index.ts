@@ -36,9 +36,9 @@ const cardTemplate = (params: {
   referral?: string;
   transactions: string[];
 }) => `🧾 Карточка клиента (личный кабинет)
-	•	💰 Баланс: [${params.balance} PZ]
+	•	💰 Баланс: [${params.balance} ₽]
 	•	👥 Партнёры: [${params.partners}]
-	•	🎁 Бонусы: [${params.bonus} PZ]
+	•	🎁 Бонусы: [${params.bonus} ₽]
 ${params.transactions.length ? `	•	📊 История начислений: [список транзакций]\n${params.transactions.join('\n')}` : '	•	📊 История начислений: [список транзакций]'}`;
 
 const directPlanText = `(на кнопку 25%) Прямая комиссия — 25%
@@ -83,7 +83,6 @@ async function showDashboard(ctx: Context) {
     return;
   }
 
-  console.log('💳 Dashboard: Getting dashboard for user:', user.id);
   const dashboard = await getPartnerDashboard(user.id);
   if (!dashboard) {
     await ctx.reply('Вы ещё не активировали партнёрскую программу. Выберите формат участия.');
@@ -91,13 +90,10 @@ async function showDashboard(ctx: Context) {
   }
 
   const { profile, stats } = dashboard;
-  console.log('💳 Dashboard: Profile balance:', profile.balance);
-  console.log('💳 Dashboard: Profile bonus:', profile.bonus);
-  console.log('💳 Dashboard: Transactions count:', profile.transactions.length);
   const transactions = profile.transactions.map((tx) => {
     const sign = tx.type === 'CREDIT' ? '+' : '-';
     const amount = Number(tx.amount).toFixed(2);
-    return `${sign}${amount} PZ — ${tx.description}`;
+    return `${sign}${amount} ₽ — ${tx.description}`;
   });
 
   const message = cardTemplate({
@@ -148,41 +144,9 @@ async function showPartners(ctx: Context) {
     return;
   }
 
-  const { stats, profile } = dashboard;
+  const { stats } = dashboard;
   await ctx.answerCbQuery();
-  
-  // Get detailed list of partners
-  const { prisma } = await import('../../lib/prisma.js');
-  const referrals = await prisma.partnerReferral.findMany({
-    where: { profileId: profile.id },
-    orderBy: { createdAt: 'desc' }
-  });
-
-  let message = `👥 Мои партнёры\n━━━━━━━━━━━━━━━━━━━━━━━━\nВсего: ${stats.partners}\nПрямых: ${stats.directPartners}\nМногоуровневых: ${stats.multiPartners}\n\n📋 Список партнёров:\n`;
-  
-  if (referrals.length === 0) {
-    message += 'Пока нет партнёров 😔\nПриглашайте друзей и зарабатывайте!';
-  } else {
-    // Get user details for each referral
-    for (const referral of referrals) {
-      if (referral.referredId) {
-        const partnerUser = await prisma.user.findUnique({
-          where: { id: referral.referredId }
-        });
-        
-        if (partnerUser) {
-          const levelText = referral.level === 1 ? '1-й уровень' : `${referral.level}-й уровень`;
-          const date = new Date(referral.createdAt).toLocaleDateString();
-          
-          message += `${referrals.indexOf(referral) + 1}. ${partnerUser.firstName || 'Пользователь'} (@${partnerUser.username || partnerUser.telegramId})\n   ${levelText} • ${date}\n`;
-        }
-      }
-    }
-  }
-  
-  message += '\n━━━━━━━━━━━━━━━━━━━━━━━━';
-  
-  await ctx.reply(message);
+  await ctx.reply(`👥 Мои партнёры\nВсего: ${stats.partners}\nПрямых: ${stats.directPartners}`);
 }
 
 async function showPartnersByLevel(ctx: Context, level: number) {

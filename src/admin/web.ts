@@ -80,17 +80,6 @@ router.post('/login', (req, res) => {
 // Main admin panel
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    // Get total balance from all partners
-    console.log('📊 Admin: Getting total balance from all partners');
-    const totalBalanceResult = await prisma.partnerProfile.aggregate({
-      _sum: {
-        balance: true
-      }
-    });
-    const totalBalance = totalBalanceResult._sum.balance || 0;
-    console.log('📊 Admin: Total balance result:', totalBalanceResult);
-    console.log('📊 Admin: Total balance:', totalBalance);
-
     const stats = {
       categories: await prisma.category.count(),
       products: await prisma.product.count(),
@@ -98,7 +87,6 @@ router.get('/', requireAdmin, async (req, res) => {
       reviews: await prisma.review.count(),
       orders: await prisma.orderRequest.count(),
       users: await prisma.user.count(),
-      totalBalance: totalBalance,
     };
 
     res.send(`
@@ -131,22 +119,6 @@ router.get('/', requireAdmin, async (req, res) => {
           }
           .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
           .stat-label { color: #666; margin-top: 5px; }
-          
-          .balance-summary { margin: 20px 0; }
-          .balance-card { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            color: white; 
-            padding: 20px; 
-            border-radius: 12px; 
-            display: flex; 
-            align-items: center; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-          }
-          .balance-icon { font-size: 3em; margin-right: 20px; }
-          .balance-info { flex: 1; }
-          .balance-title { font-size: 1.1em; opacity: 0.9; margin-bottom: 5px; }
-          .balance-amount { font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }
-          .balance-rub { font-size: 1.2em; opacity: 0.8; }
           .sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
           .section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
           .section h3 { margin-top: 0; color: #333; }
@@ -198,21 +170,6 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="stat-number">${stats.orders}</div>
               <div class="stat-label">Заказы</div>
             </button>
-            <button class="stat-card" onclick="openAdminPage('/admin/balances')">
-              <div class="stat-number">💰</div>
-              <div class="stat-label">Управление балансами</div>
-            </button>
-          </div>
-
-          <div class="balance-summary">
-            <div class="balance-card">
-              <div class="balance-icon">💰</div>
-              <div class="balance-info">
-                <div class="balance-title">Общий баланс системы</div>
-                <div class="balance-amount">${stats.totalBalance.toFixed(2)} PZ</div>
-                <div class="balance-rub">${(stats.totalBalance * 100).toFixed(2)} ₽</div>
-              </div>
-            </div>
           </div>
 
           <div class="sections">
@@ -971,319 +928,13 @@ router.get('/partners-network', requireAdmin, async (req, res) => {
   }
 });
 
-// Balance management page
-router.get('/balances', requireAdmin, async (req, res) => {
-  try {
-    console.log('💰 Admin balances page accessed');
-    
-    const users = await prisma.user.findMany({
-      include: {
-        partner: true
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100
-    });
-
-    let html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Управление балансами</title>
-        <meta charset="utf-8">
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; }
-          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
-          .btn:hover { background: #0056b3; }
-          .btn-success { background: #28a745; }
-          .btn-danger { background: #dc3545; }
-          .btn-warning { background: #ffc107; color: #333; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-          th { background-color: #f2f2f2; }
-          .balance-positive { color: #28a745; font-weight: bold; }
-          .balance-zero { color: #6c757d; }
-          .balance-negative { color: #dc3545; font-weight: bold; }
-          .form-group { margin-bottom: 15px; }
-          .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-          .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-          .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
-          .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px; }
-          .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
-          .close:hover { color: black; }
-          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
-          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        </style>
-      </head>
-      <body>
-        <h2>💰 Управление балансами PZ</h2>
-        <a href="/admin" class="btn">← Назад</a>
-        
-        ${req.query.success === 'balance_updated' ? '<div class="alert alert-success">✅ Баланс успешно обновлен</div>' : ''}
-        ${req.query.error === 'insufficient_balance' ? '<div class="alert alert-error">❌ Недостаточно средств на балансе</div>' : ''}
-        ${req.query.error === 'user_not_found' ? '<div class="alert alert-error">❌ Пользователь не найден</div>' : ''}
-        ${req.query.error === 'invalid_amount' ? '<div class="alert alert-error">❌ Неверная сумма</div>' : ''}
-        
-        <div style="margin: 20px 0;">
-          <button onclick="openModal('addPZ')" class="btn btn-success">➕ Начислить PZ</button>
-          <button onclick="openModal('deductPZ')" class="btn btn-danger">➖ Списать PZ</button>
-        </div>
-        
-        <table>
-          <tr>
-            <th>Пользователь</th>
-            <th>Telegram ID</th>
-            <th>Баланс PZ</th>
-            <th>Последняя активность</th>
-            <th>Действия</th>
-          </tr>
-    `;
-
-    users.forEach(user => {
-      const balance = user.partner?.balance || 0;
-      const balanceClass = balance > 0 ? 'balance-positive' : balance < 0 ? 'balance-negative' : 'balance-zero';
-      const lastActivity = user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Нет данных';
-      
-      html += `
-        <tr>
-          <td>${user.firstName || 'Не указано'} ${user.lastName || ''}</td>
-          <td>${user.telegramId}</td>
-          <td class="${balanceClass}">${balance.toFixed(2)} PZ</td>
-          <td>${lastActivity}</td>
-          <td>
-            <button onclick="openUserModal('${user.id}', '${user.firstName || 'Пользователь'}', ${balance})" class="btn btn-warning">📊 История</button>
-          </td>
-        </tr>
-      `;
-    });
-
-    html += `
-        </table>
-        
-        <!-- Add PZ Modal -->
-        <div id="addPZModal" class="modal">
-          <div class="modal-content">
-            <span class="close" onclick="closeModal('addPZ')">&times;</span>
-            <h3>➕ Начислить PZ</h3>
-            <form action="/admin/balances/add" method="post">
-              <div class="form-group">
-                <label>Пользователь:</label>
-                <select name="userId" required>
-                  <option value="">Выберите пользователя</option>
-                  ${users.map(user => `
-                    <option value="${user.id}">${user.firstName || 'Пользователь'} (${user.telegramId})</option>
-                  `).join('')}
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Сумма PZ:</label>
-                <input type="number" name="amount" step="0.01" min="0.01" required placeholder="Например: 10.50">
-              </div>
-              <div class="form-group">
-                <label>Описание:</label>
-                <textarea name="description" required placeholder="Причина начисления"></textarea>
-              </div>
-              <button type="submit" class="btn btn-success">Начислить</button>
-            </form>
-          </div>
-        </div>
-        
-        <!-- Deduct PZ Modal -->
-        <div id="deductPZModal" class="modal">
-          <div class="modal-content">
-            <span class="close" onclick="closeModal('deductPZ')">&times;</span>
-            <h3>➖ Списать PZ</h3>
-            <form action="/admin/balances/deduct" method="post">
-              <div class="form-group">
-                <label>Пользователь:</label>
-                <select name="userId" required>
-                  <option value="">Выберите пользователя</option>
-                  ${users.map(user => `
-                    <option value="${user.id}">${user.firstName || 'Пользователь'} (${user.telegramId}) - ${(user.partner?.balance || 0).toFixed(2)} PZ</option>
-                  `).join('')}
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Сумма PZ:</label>
-                <input type="number" name="amount" step="0.01" min="0.01" required placeholder="Например: 5.25">
-              </div>
-              <div class="form-group">
-                <label>Описание:</label>
-                <textarea name="description" required placeholder="Причина списания"></textarea>
-              </div>
-              <button type="submit" class="btn btn-danger">Списать</button>
-            </form>
-          </div>
-        </div>
-        
-        <!-- User History Modal -->
-        <div id="userHistoryModal" class="modal">
-          <div class="modal-content">
-            <span class="close" onclick="closeModal('userHistory')">&times;</span>
-            <h3 id="userHistoryTitle">📊 История операций</h3>
-            <div id="userHistoryContent">
-              <!-- History will be loaded here -->
-            </div>
-          </div>
-        </div>
-        
-        <script>
-          function openModal(type) {
-            document.getElementById(type + 'Modal').style.display = 'block';
-          }
-          
-          function closeModal(type) {
-            document.getElementById(type + 'Modal').style.display = 'none';
-          }
-          
-          function openUserModal(userId, userName, balance) {
-            document.getElementById('userHistoryTitle').textContent = '📊 История операций - ' + userName + ' (Баланс: ' + balance.toFixed(2) + ' PZ)';
-            document.getElementById('userHistoryContent').innerHTML = 'Загрузка...';
-            document.getElementById('userHistoryModal').style.display = 'block';
-            
-            // Load user history
-            fetch('/admin/balances/history/' + userId)
-              .then(response => response.text())
-              .then(html => {
-                document.getElementById('userHistoryContent').innerHTML = html;
-              })
-              .catch(error => {
-                document.getElementById('userHistoryContent').innerHTML = 'Ошибка загрузки истории';
-              });
-          }
-          
-          // Close modal when clicking outside
-          window.onclick = function(event) {
-            const modals = document.getElementsByClassName('modal');
-            for (let modal of modals) {
-              if (event.target == modal) {
-                modal.style.display = 'none';
-              }
-            }
-          }
-        </script>
-      </body>
-      </html>
-    `;
-
-    res.send(html);
-  } catch (error) {
-    console.error('Balances page error:', error);
-    res.status(500).send('Ошибка загрузки страницы балансов');
-  }
-});
-
-// Add PZ to user
-router.post('/balances/add', requireAdmin, async (req, res) => {
-  try {
-    const { userId, amount, description } = req.body;
-    
-    if (!userId || !amount || !description) {
-      return res.redirect('/admin/balances?error=invalid_amount');
-    }
-    
-    const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      return res.redirect('/admin/balances?error=invalid_amount');
-    }
-    
-    console.log('💰 Admin: Adding PZ to user:', userId, 'amount:', amountNum);
-    
-    const { addPZToUser } = await import('../services/partner-service.js');
-    await addPZToUser(userId, amountNum, description);
-    
-    console.log('💰 Admin: PZ added successfully');
-    res.redirect('/admin/balances?success=balance_updated');
-  } catch (error) {
-    console.error('Add PZ error:', error);
-    res.redirect('/admin/balances?error=user_not_found');
-  }
-});
-
-// Deduct PZ from user
-router.post('/balances/deduct', requireAdmin, async (req, res) => {
-  try {
-    const { userId, amount, description } = req.body;
-    
-    if (!userId || !amount || !description) {
-      return res.redirect('/admin/balances?error=invalid_amount');
-    }
-    
-    const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      return res.redirect('/admin/balances?error=invalid_amount');
-    }
-    
-    console.log('💰 Admin: Deducting PZ from user:', userId, 'amount:', amountNum);
-    
-    const { deductPZFromUser } = await import('../services/partner-service.js');
-    await deductPZFromUser(userId, amountNum, description);
-    
-    console.log('💰 Admin: PZ deducted successfully');
-    res.redirect('/admin/balances?success=balance_updated');
-  } catch (error) {
-    console.error('Deduct PZ error:', error);
-    if (error instanceof Error && error.message === 'Insufficient balance') {
-      res.redirect('/admin/balances?error=insufficient_balance');
-    } else {
-      res.redirect('/admin/balances?error=user_not_found');
-    }
-  }
-});
-
-// Get user transaction history
-router.get('/balances/history/:userId', requireAdmin, async (req, res) => {
-  try {
-    const { userId } = req.params;
-    
-    const { getUserTransactionHistory } = await import('../services/partner-service.js');
-    const transactions = await getUserTransactionHistory(userId, 50);
-    
-    let html = '<table style="width: 100%; border-collapse: collapse;">';
-    html += '<tr><th>Дата</th><th>Тип</th><th>Сумма</th><th>Описание</th></tr>';
-    
-    if (transactions.length === 0) {
-      html += '<tr><td colspan="4" style="text-align: center; padding: 20px;">История операций пуста</td></tr>';
-    } else {
-      transactions.forEach(tx => {
-        const sign = tx.type === 'CREDIT' ? '+' : '-';
-        const color = tx.type === 'CREDIT' ? '#28a745' : '#dc3545';
-        const date = new Date(tx.createdAt).toLocaleString('ru-RU');
-        
-        html += `
-          <tr>
-            <td>${date}</td>
-            <td>${tx.type === 'CREDIT' ? 'Начисление' : 'Списание'}</td>
-            <td style="color: ${color}; font-weight: bold;">${sign}${Number(tx.amount).toFixed(2)} PZ</td>
-            <td>${tx.description}</td>
-          </tr>
-        `;
-      });
-    }
-    
-    html += '</table>';
-    res.send(html);
-  } catch (error) {
-    console.error('History error:', error);
-    res.send('<p>Ошибка загрузки истории операций</p>');
-  }
-});
-
 // Individual admin pages
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     console.log('👥 Admin users page accessed');
-    console.log('👥 Admin users: Fetching users with partner profiles');
     const users = await prisma.user.findMany({
-      include: {
-        partner: true // Include partner profile with balance
-      },
       orderBy: { createdAt: 'desc' },
       take: 50 // Limit to last 50 users
-    });
-    console.log('👥 Admin users: Found users:', users.length);
-    users.forEach(user => {
-      console.log(`👥 Admin users: User ${user.firstName} (${user.telegramId}) - Partner balance: ${user.partner?.balance || 0}`);
     });
 
     let html = `
@@ -1319,37 +970,9 @@ router.get('/users', requireAdmin, async (req, res) => {
           .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
           .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
           .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-          
-          /* Hierarchy styles */
-          .hierarchy-level-0 { border-left: 4px solid #fbbf24; }
-          .hierarchy-level-1 { border-left: 4px solid #10b981; }
-          .hierarchy-level-2 { border-left: 4px solid #3b82f6; }
-          .hierarchy-level-3 { border-left: 4px solid #8b5cf6; }
-          
-          .level-icon {
-            font-size: 14px;
-            margin-right: 5px;
-          }
-          
-          .hierarchy-info {
-            background: #f3f4f6;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 8px;
-            border-left: 4px solid #3b82f6;
-          }
         </style>
-        <div class="hierarchy-info">
-          <h4>🏗️ Иерархическая структура реферальной сети:</h4>
-          <p><strong>👑</strong> Уровень 0 - Корневые пользователи (без пригласителя)</p>
-          <p><strong>👤</strong> Уровень 1 - Прямые рефералы</p>
-          <p><strong>👥</strong> Уровень 2 - Рефералы 2-го уровня</p>
-          <p><strong>👶</strong> Уровень 3+ - Глубокие уровни</p>
-          <p><em>Цветные полосы слева показывают уровень иерархии</em></p>
-        </div>
-        
         <table>
-          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Баланс</th><th>Чей реферал</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
+          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Чей реферал</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
     `;
 
     // Get referral information for all users
@@ -1375,63 +998,17 @@ router.get('/users', requireAdmin, async (req, res) => {
       }
     });
 
-    // Build hierarchy tree
-    const buildHierarchy = (): { user: any, level: number, children: any[] }[] => {
-      const hierarchy: { user: any, level: number, children: any[] }[] = [];
-      const userMap = new Map();
-      
-      // Create user map
-      users.forEach(user => {
-        userMap.set(user.id, { user, level: 0, children: [] });
-      });
-      
-      // Build parent-child relationships
-      referrals.forEach(referral => {
-        if (referral.referredId) {
-          const child = userMap.get(referral.referredId);
-          if (child) {
-            const parent = userMap.get(referral.profile.user.id);
-            if (parent) {
-              child.level = parent.level + 1;
-              parent.children.push(child);
-            }
-          }
-        }
-      });
-      
-      // Find root users (no parents)
-      const roots = Array.from(userMap.values()).filter(item => {
-        return !referrals.some(r => r.referredId === item.user.id);
-      });
-      
-      // Sort by creation date
-      roots.sort((a, b) => new Date(a.user.createdAt).getTime() - new Date(b.user.createdAt).getTime());
-      
-      return roots;
-    };
-
-    const hierarchy = buildHierarchy();
-    
-    const renderUser = (item: { user: any, level: number, children: any[] }, index: number) => {
-      const user = item.user;
+    users.forEach(user => {
+      // Find who invited this user
       const referral = referrals.find(r => r.referredId === user.id);
       const inviterInfo = referral ? `${referral.profile.user.firstName || 'Не указано'} (@${referral.profile.user.username || referral.profile.user.telegramId})` : 'Нет пригласителя';
       
-      const indent = '&nbsp;'.repeat(item.level * 4);
-      const levelIcon = item.level === 0 ? '👑' : item.level === 1 ? '👤' : item.level === 2 ? '👥' : '👶';
-      
-      const userBalance = user.partner ? user.partner.balance : 0;
-      const balanceDisplay = userBalance > 0 ? `${userBalance.toFixed(2)} PZ` : '0.00 PZ';
-      
-      let html = `
-        <tr class="hierarchy-level-${item.level}" style="background-color: ${item.level % 2 === 0 ? '#f9f9f9' : '#ffffff'};">
-          <td>${indent}<span class="level-icon">${levelIcon}</span> ${user.id.slice(0, 8)}...</td>
+      html += `
+        <tr>
+          <td>${user.id.slice(0, 8)}...</td>
           <td>${user.telegramId}</td>
           <td>${user.firstName || 'Не указано'}</td>
           <td>${user.username ? '@' + user.username : 'Не указано'}</td>
-          <td style="text-align: center; font-weight: bold; color: ${userBalance > 0 ? '#28a745' : '#6c757d'};">
-            ${balanceDisplay}
-          </td>
           <td>
             ${inviterInfo}
             <div style="margin-top: 5px;">
@@ -1455,17 +1032,6 @@ router.get('/users', requireAdmin, async (req, res) => {
           </td>
         </tr>
       `;
-      
-      // Add children recursively
-      item.children.forEach(child => {
-        html += renderUser(child, index + 1);
-      });
-      
-      return html;
-    };
-
-    hierarchy.forEach((root, index) => {
-      html += renderUser(root, index);
     });
 
     html += `
