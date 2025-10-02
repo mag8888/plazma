@@ -905,6 +905,201 @@ router.post('/orders/:id/update-status', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle user balance top-up
+router.post('/users/:id/add-balance', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+    
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return res.redirect('/admin/orders?error=invalid_amount');
+    }
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        balance: {
+          increment: amountNum
+        }
+      } as any
+    });
+
+    res.redirect('/admin/orders?success=balance_added');
+  } catch (error) {
+    console.error('User balance top-up error:', error);
+    res.redirect('/admin/orders?error=balance_add');
+  }
+});
+
+// Handle order payment
+router.post('/orders/:id/pay', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get order details
+    const order = await prisma.orderRequest.findUnique({
+      where: { id },
+      include: {
+        user: {
+          include: {
+            partner: true
+          }
+        }
+      }
+    });
+
+    if (!order || !order.user) {
+      return res.redirect('/admin/orders?error=order_not_found');
+    }
+
+    // Calculate order total from itemsJson
+    let orderTotal = 0;
+    try {
+      if (order.itemsJson && typeof order.itemsJson === 'string') {
+        const items = JSON.parse(order.itemsJson);
+        orderTotal = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+      } else if (typeof order.itemsJson === 'object' && Array.isArray(order.itemsJson)) {
+        orderTotal = order.itemsJson.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+      }
+    } catch (error) {
+      console.error('Error parsing order items:', error);
+      orderTotal = 0;
+    }
+
+    // Check if user has enough balance
+    const userBalance = (order.user as any).balance || 0;
+    if (userBalance < orderTotal) {
+      return res.redirect('/admin/orders?error=insufficient_balance');
+    }
+
+    // Deduct from user balance
+    await prisma.user.update({
+      where: { id: order.user.id },
+      data: {
+        balance: {
+          decrement: orderTotal
+        }
+      } as any
+    });
+
+    // Update order status
+    await prisma.orderRequest.update({
+      where: { id },
+      data: { status: 'COMPLETED' }
+    });
+
+    // Calculate and distribute partner rewards
+    if (order.user.partner) {
+      const partner = order.user.partner;
+      let rewardAmount = 0;
+      let rewardDescription = '';
+
+      if (partner.programType === 'DIRECT') {
+        // Direct program: 25% commission
+        rewardAmount = orderTotal * 0.25;
+        rewardDescription = `Комиссия 25% за заказ #${order.id}`;
+      } else if (partner.programType === 'MULTI_LEVEL') {
+        // Multi-level program: 15% for direct referral
+        rewardAmount = orderTotal * 0.15;
+        rewardDescription = `Комиссия 15% за заказ #${order.id}`;
+      }
+
+      if (rewardAmount > 0) {
+        // Add to partner balance
+        await prisma.partnerProfile.update({
+          where: { id: partner.id },
+          data: {
+            balance: {
+              increment: rewardAmount
+            }
+          }
+        });
+
+        // Record transaction
+        await prisma.partnerTransaction.create({
+          data: {
+            profileId: partner.id,
+            amount: rewardAmount,
+            type: 'CREDIT',
+            description: rewardDescription
+          }
+        });
+
+        console.log(`Partner reward: ${rewardAmount} PZ to partner ${partner.id} for order ${id}`);
+      }
+
+      // Handle multi-level rewards (if applicable)
+      if (partner.programType === 'MULTI_LEVEL') {
+        // Find the inviter of this partner
+        const inviterReferral = await prisma.partnerReferral.findFirst({
+          where: { referredId: order.user.id },
+          include: {
+            profile: true
+          }
+        });
+
+        if (inviterReferral) {
+          // Level 2: 5% commission
+          const level2Reward = orderTotal * 0.05;
+          await prisma.partnerProfile.update({
+            where: { id: inviterReferral.profile.id },
+            data: {
+              balance: {
+                increment: level2Reward
+              }
+            }
+          });
+
+          await prisma.partnerTransaction.create({
+            data: {
+              profileId: inviterReferral.profile.id,
+              amount: level2Reward,
+              type: 'CREDIT',
+              description: `Комиссия 5% (2-й уровень) за заказ #${order.id}`
+            }
+          });
+
+          // Find the inviter of the inviter (Level 3)
+          const level3Referral = await prisma.partnerReferral.findFirst({
+            where: { referredId: inviterReferral.profile.userId },
+            include: {
+              profile: true
+            }
+          });
+
+          if (level3Referral) {
+            // Level 3: 5% commission
+            const level3Reward = orderTotal * 0.05;
+            await prisma.partnerProfile.update({
+              where: { id: level3Referral.profile.id },
+              data: {
+                balance: {
+                  increment: level3Reward
+                }
+              }
+            });
+
+            await prisma.partnerTransaction.create({
+              data: {
+                profileId: level3Referral.profile.id,
+                amount: level3Reward,
+                type: 'CREDIT',
+                description: `Комиссия 5% (3-й уровень) за заказ #${order.id}`
+              }
+            });
+          }
+        }
+      }
+    }
+
+    res.redirect('/admin/orders?success=order_paid');
+  } catch (error) {
+    console.error('Order payment error:', error);
+    res.redirect('/admin/orders?error=payment_failed');
+  }
+});
+
 // Handle order deletion
 router.post('/orders/:id/delete', requireAdmin, async (req, res) => {
   try {
@@ -2118,7 +2313,13 @@ router.get('/reviews', requireAdmin, async (req, res) => {
 router.get('/orders', requireAdmin, async (req, res) => {
   try {
     const orders = await prisma.orderRequest.findMany({
-      include: { user: true },
+      include: { 
+        user: {
+          include: {
+            partner: true
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -2144,6 +2345,12 @@ router.get('/orders', requireAdmin, async (req, res) => {
         
         ${req.query.success === 'order_updated' ? '<div class="alert alert-success">✅ Статус заказа обновлен</div>' : ''}
         ${req.query.error === 'order_update' ? '<div class="alert alert-error">❌ Ошибка при обновлении статуса заказа</div>' : ''}
+        ${req.query.success === 'balance_added' ? '<div class="alert alert-success">✅ Баланс пользователя пополнен</div>' : ''}
+        ${req.query.success === 'order_paid' ? '<div class="alert alert-success">✅ Заказ оплачен, партнёрские вознаграждения начислены</div>' : ''}
+        ${req.query.error === 'insufficient_balance' ? '<div class="alert alert-error">❌ Недостаточно средств на балансе пользователя</div>' : ''}
+        ${req.query.error === 'invalid_amount' ? '<div class="alert alert-error">❌ Неверная сумма для пополнения</div>' : ''}
+        ${req.query.error === 'payment_failed' ? '<div class="alert alert-error">❌ Ошибка при оплате заказа</div>' : ''}
+        ${req.query.error === 'order_not_found' ? '<div class="alert alert-error">❌ Заказ не найден</div>' : ''}
         <style>
           .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
           .status-new { background: #fff3cd; color: #856404; }
@@ -2155,7 +2362,7 @@ router.get('/orders', requireAdmin, async (req, res) => {
           .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         </style>
         <table>
-          <tr><th>ID</th><th>Пользователь</th><th>Статус</th><th>Контакт</th><th>Сообщение</th><th>Создан</th><th>Действия</th></tr>
+          <tr><th>ID</th><th>Пользователь</th><th>Баланс</th><th>Статус</th><th>Контакт</th><th>Сообщение</th><th>Создан</th><th>Действия</th></tr>
     `;
 
     orders.forEach(order => {
@@ -2163,6 +2370,15 @@ router.get('/orders', requireAdmin, async (req, res) => {
         <tr>
           <td>${order.id.substring(0, 8)}...</td>
           <td>${order.user?.firstName || 'Не указан'}</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <span style="font-weight: bold; color: ${(order.user as any)?.balance > 0 ? '#28a745' : '#dc3545'};">${((order.user as any)?.balance || 0).toFixed(2)} PZ</span>
+              <form method="post" action="/admin/users/${order.user?.id}/add-balance" style="display: inline;">
+                <input type="number" name="amount" placeholder="Сумма" style="width: 60px; padding: 2px; font-size: 10px;" step="0.01" min="0.01" required>
+                <button type="submit" style="background: #28a745; color: white; padding: 2px 6px; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">+</button>
+              </form>
+            </div>
+          </td>
           <td>
             <span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span>
           </td>
@@ -2179,6 +2395,14 @@ router.get('/orders', requireAdmin, async (req, res) => {
                   <option value="CANCELLED" ${order.status === 'CANCELLED' ? 'selected' : ''}>Отменен</option>
                 </select>
                 <button type="submit" style="background: #007bff; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 2px;">Обновить</button>
+              </form>
+              <form method="post" action="/admin/orders/${order.id}/pay" style="display: inline;">
+                <button type="submit" 
+                        style="background: ${(order.user as any)?.balance > 0 ? '#28a745' : '#6c757d'}; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; ${(order.user as any)?.balance <= 0 ? 'opacity: 0.5;' : ''}" 
+                        ${(order.user as any)?.balance <= 0 ? 'disabled' : ''}
+                        onclick="return confirm('Списать ${((order.user as any)?.balance || 0).toFixed(2)} PZ с баланса пользователя?')">
+                  💳 Заказ оплачен
+                </button>
               </form>
             </div>
           </td>

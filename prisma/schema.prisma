@@ -31,6 +31,7 @@ model User {
   languageCode  String?
   phone         String?
   selectedRegion Region?        @default(RUSSIA)
+  balance       Float           @default(0)
   cartItems     CartItem[]
   histories     UserHistory[]
   partner       PartnerProfile?
