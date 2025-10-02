@@ -76,6 +76,8 @@ async function sendProductCards(ctx: Context, categoryId: string) {
 
     // Send products in a grid layout
     for (const product of products) {
+      console.log(`🛍️ Product: ${product.title}, ImageUrl: ${product.imageUrl}`);
+      
       const buttons = [];
       if (product.description) {
         buttons.push(Markup.button.callback('📖 Подробнее', `${PRODUCT_MORE_PREFIX}${product.id}`));
@@ -85,12 +87,14 @@ async function sendProductCards(ctx: Context, categoryId: string) {
 
       const message = formatProductMessage(product);
       
-      if (product.imageUrl) {
+      if (product.imageUrl && product.imageUrl.trim() !== '') {
+        console.log(`🛍️ Sending product with image: ${product.imageUrl}`);
         await ctx.replyWithPhoto(product.imageUrl, {
           caption: message,
           ...Markup.inlineKeyboard([buttons]),
         });
       } else {
+        console.log(`🛍️ Sending product without image (no imageUrl)`);
         await ctx.reply(message, Markup.inlineKeyboard([buttons]));
       }
     }
