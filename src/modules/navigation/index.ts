@@ -117,17 +117,23 @@ export const navigationModule: BotModule = {
             programType
           });
           console.log('🔗 Referral: User action logged');
+          
+          // Send main greeting for referral users
+          await ctx.reply(greeting, mainKeyboard());
         } else {
           console.log('🔗 Referral: Partner profile not found for code:', referralCode);
           await ctx.reply('❌ Реферальная ссылка недействительна. Партнёр не найден.');
+          await ctx.reply(greeting, mainKeyboard());
         }
       } catch (error) {
         console.error('🔗 Referral: Error processing referral:', error);
         await ctx.reply('❌ Ошибка при обработке реферальной ссылки. Попробуйте позже.');
+        await ctx.reply(greeting, mainKeyboard());
       }
+    } else {
+      // Regular start command (no referral)
+      await ctx.reply(greeting, mainKeyboard());
     }
-
-    await ctx.reply(greeting, mainKeyboard());
 
     // Send welcome message with video button
     const videoUrl = 'https://res.cloudinary.com/dt4r1tigf/video/upload/v1759337188/%D0%9F%D0%9E%D0%A7%D0%95%D0%9C%D0%A3_%D0%91%D0%90%D0%94%D0%AB_%D0%BD%D0%B5_%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%B0%D1%8E%D1%82_%D0%95%D1%81%D1%82%D1%8C_%D1%80%D0%B5%D1%88%D0%B5%D0%BD%D0%B8%D0%B5_gz54oh.mp4';
