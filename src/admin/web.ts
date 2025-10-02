@@ -1774,6 +1774,9 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <form method="post" action="/admin/cleanup-duplicates" style="display: inline;">
           <button type="submit" class="btn" style="background: #dc3545;" onclick="return confirm('⚠️ Удалить дублирующиеся записи партнёров и транзакций? Это действие необратимо!')">🧹 Очистить дубли</button>
         </form>
+        <form method="post" action="/admin/recalculate-all-balances" style="display: inline;">
+          <button type="submit" class="btn" style="background: #ffc107; color: #000;" onclick="return confirm('🔄 Пересчитать ВСЕ балансы партнёров?')">🔄 Пересчитать все балансы</button>
+        </form>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -1786,9 +1789,11 @@ router.get('/partners', requireAdmin, async (req, res) => {
         ${req.query.success === 'balance_subtracted' ? '<div class="alert alert-success">✅ Баланс успешно списан</div>' : ''}
         ${req.query.success === 'bonuses_recalculated' ? '<div class="alert alert-success">✅ Бонусы успешно пересчитаны</div>' : ''}
         ${req.query.success === 'duplicates_cleaned' ? `<div class="alert alert-success">✅ Дубли очищены! Удалено ${req.query.referrals || 0} дублей рефералов и ${req.query.transactions || 0} дублей транзакций</div>` : ''}
+        ${req.query.success === 'all_balances_recalculated' ? '<div class="alert alert-success">✅ Все балансы партнёров пересчитаны</div>' : ''}
         ${req.query.error === 'balance_add' ? '<div class="alert alert-error">❌ Ошибка при пополнении баланса</div>' : ''}
         ${req.query.error === 'balance_subtract' ? '<div class="alert alert-error">❌ Ошибка при списании баланса</div>' : ''}
         ${req.query.error === 'bonus_recalculation' ? '<div class="alert alert-error">❌ Ошибка при пересчёте бонусов</div>' : ''}
+        ${req.query.error === 'balance_recalculation_failed' ? '<div class="alert alert-error">❌ Ошибка при пересчёте всех балансов</div>' : ''}
         ${req.query.error === 'cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей</div>' : ''}
         <style>
           .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px; }
@@ -2669,6 +2674,43 @@ router.get('/test-referral-links', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Test referral links error:', error);
     res.send('❌ Error testing referral links: ' + (error instanceof Error ? error.message : String(error)));
+  }
+});
+
+// Force recalculate all partner balances
+router.post('/recalculate-all-balances', requireAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Starting full balance recalculation...');
+    
+    // Get all partner profiles
+    const profiles = await prisma.partnerProfile.findMany();
+    
+    for (const profile of profiles) {
+      console.log(`📊 Processing profile ${profile.id}...`);
+      
+      // Calculate total bonus from transactions
+      const transactions = await prisma.partnerTransaction.findMany({
+        where: { profileId: profile.id }
+      });
+      
+      const totalBonus = transactions.reduce((sum, tx) => {
+        return sum + (tx.type === 'CREDIT' ? tx.amount : -tx.amount);
+      }, 0);
+      
+      // Update profile bonus
+      await prisma.partnerProfile.update({
+        where: { id: profile.id },
+        data: { bonus: totalBonus }
+      });
+      
+      console.log(`✅ Updated profile ${profile.id}: ${totalBonus} PZ bonus`);
+    }
+    
+    console.log('🎉 Full balance recalculation completed!');
+    res.redirect('/admin/partners?success=all_balances_recalculated');
+  } catch (error) {
+    console.error('❌ Full balance recalculation error:', error);
+    res.redirect('/admin/partners?error=balance_recalculation_failed');
   }
 });
 

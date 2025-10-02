@@ -96,8 +96,11 @@ async function showDashboard(ctx: Context) {
     return `${sign}${amount} ₽ — ${tx.description}`;
   });
 
+  // Calculate total balance (balance + bonus)
+  const totalBalance = Number(profile.balance) + Number(profile.bonus);
+  
   const message = cardTemplate({
-    balance: Number(profile.balance).toFixed(2),
+    balance: totalBalance.toFixed(2),
     partners: stats.partners,
     direct: stats.directPartners,
     bonus: Number(profile.bonus).toFixed(2),
