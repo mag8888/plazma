@@ -213,7 +213,7 @@ export const shopModule: BotModule = {
   async register(bot: Telegraf<Context>) {
     console.log('🛍️ Registering shop module...');
     bot.hears(['Магазин', 'Каталог', '🛒 Магазин'], async (ctx) => {
-      console.log('🛍️ Shop button pressed by user:', ctx.from?.id);
+      console.log('🛍️ Shop button pressed by user:', ctx.from?.id, ctx.message?.text);
       await showCategories(ctx);
     });
 

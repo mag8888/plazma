@@ -107,8 +107,8 @@ router.get('/', requireAdmin, async (req, res) => {
           .sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
           .section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
           .section h3 { margin-top: 0; color: #333; }
-          .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 6px; margin: 8px 5px; font-weight: 600; transition: all 0.2s ease; cursor: pointer; border: none; }
-          .btn:hover { background: #0056b3; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
           .btn-success { background: #28a745; }
           .btn-warning { background: #ffc107; color: #333; }
           .btn-danger { background: #dc3545; }
@@ -156,7 +156,7 @@ router.get('/', requireAdmin, async (req, res) => {
           <div class="sections">
             <div class="section">
               <h3>📁 Категории</h3>
-              <a href="/admin/categories" class="btn" title="Перейти к управлению категориями">📂 Управление категориями</a>
+              <a href="/admin/categories" class="btn">Управление категориями</a>
               <form action="/admin/categories" method="post">
                 <div class="form-group">
                   <label>Название:</label>
@@ -176,7 +176,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
             <div class="section">
               <h3>🛍 Товары</h3>
-              <a href="/admin/products" class="btn" title="Перейти к управлению товарами">🛒 Управление товарами</a>
+              <a href="/admin/products" class="btn">Управление товарами</a>
               <form action="/admin/products" method="post" enctype="multipart/form-data">
                 <div class="form-group">
                   <label>Название:</label>
@@ -224,7 +224,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
             <div class="section">
               <h3>⭐ Отзывы</h3>
-              <a href="/admin/reviews" class="btn" title="Перейти к управлению отзывами">⭐ Управление отзывами</a>
+              <a href="/admin/reviews" class="btn">Управление отзывами</a>
               <form action="/admin/reviews" method="post">
                 <div class="form-group">
                   <label>Имя:</label>
