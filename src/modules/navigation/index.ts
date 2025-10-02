@@ -92,7 +92,7 @@ export const navigationModule: BotModule = {
               console.log('🔗 Referral: Sending notification to inviter:', partnerProfile.user.telegramId);
               await ctx.telegram.sendMessage(
                 partnerProfile.user.telegramId,
-                '🎉 Ваш счет пополнен на 3PZ, приглашайте больше друзей и получайте продукцию за бонусы!'
+                '━━━━━━━━━━━━━━━━━━━━━━━━\n🎉 Ваш счет пополнен на 3🪙PZ, приглашайте больше друзей и получайте продукцию за бонусы!\n━━━━━━━━━━━━━━━━━━━━━━━━'
               );
               console.log('🔗 Referral: Notification sent successfully');
             } catch (error) {

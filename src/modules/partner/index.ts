@@ -144,9 +144,41 @@ async function showPartners(ctx: Context) {
     return;
   }
 
-  const { stats } = dashboard;
+  const { stats, profile } = dashboard;
   await ctx.answerCbQuery();
-  await ctx.reply(`👥 Мои партнёры\nВсего: ${stats.partners}\nПрямых: ${stats.directPartners}`);
+  
+  // Get detailed list of partners
+  const { prisma } = await import('../../lib/prisma.js');
+  const referrals = await prisma.partnerReferral.findMany({
+    where: { profileId: profile.id },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  let message = `👥 Мои партнёры\n━━━━━━━━━━━━━━━━━━━━━━━━\nВсего: ${stats.partners}\nПрямых: ${stats.directPartners}\nМногоуровневых: ${stats.multiPartners}\n\n📋 Список партнёров:\n`;
+  
+  if (referrals.length === 0) {
+    message += 'Пока нет партнёров 😔\nПриглашайте друзей и зарабатывайте!';
+  } else {
+    // Get user details for each referral
+    for (const referral of referrals) {
+      if (referral.referredId) {
+        const partnerUser = await prisma.user.findUnique({
+          where: { id: referral.referredId }
+        });
+        
+        if (partnerUser) {
+          const levelText = referral.level === 1 ? '1-й уровень' : `${referral.level}-й уровень`;
+          const date = new Date(referral.createdAt).toLocaleDateString();
+          
+          message += `${referrals.indexOf(referral) + 1}. ${partnerUser.firstName || 'Пользователь'} (@${partnerUser.username || partnerUser.telegramId})\n   ${levelText} • ${date}\n`;
+        }
+      }
+    }
+  }
+  
+  message += '\n━━━━━━━━━━━━━━━━━━━━━━━━';
+  
+  await ctx.reply(message);
 }
 
 async function showPartnersByLevel(ctx: Context, level: number) {
