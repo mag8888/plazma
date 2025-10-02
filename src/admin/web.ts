@@ -644,6 +644,84 @@ router.post('/partners/:id/change-inviter', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle partner balance addition
+router.post('/partners/:id/add-balance', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+    
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { id },
+      include: { user: true }
+    });
+    
+    if (!partner) {
+      return res.redirect('/admin/partners?error=partner_not_found');
+    }
+    
+    const newBalance = partner.balance + parseFloat(amount);
+    
+    await prisma.partnerProfile.update({
+      where: { id },
+      data: { balance: newBalance }
+    });
+    
+    // Record transaction
+    await prisma.partnerTransaction.create({
+      data: {
+        profileId: id,
+        amount: parseFloat(amount),
+        type: 'CREDIT',
+        description: `Админ начислил ${amount} PZ`
+      }
+    });
+    
+    res.redirect('/admin/partners?success=balance_added');
+  } catch (error) {
+    console.error('Add balance error:', error);
+    res.redirect('/admin/partners?error=balance_add');
+  }
+});
+
+// Handle partner balance subtraction
+router.post('/partners/:id/subtract-balance', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+    
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { id },
+      include: { user: true }
+    });
+    
+    if (!partner) {
+      return res.redirect('/admin/partners?error=partner_not_found');
+    }
+    
+    const newBalance = Math.max(0, partner.balance - parseFloat(amount));
+    
+    await prisma.partnerProfile.update({
+      where: { id },
+      data: { balance: newBalance }
+    });
+    
+    // Record transaction
+    await prisma.partnerTransaction.create({
+      data: {
+        profileId: id,
+        amount: parseFloat(amount),
+        type: 'DEBIT',
+        description: `Админ списал ${amount} PZ`
+      }
+    });
+    
+    res.redirect('/admin/partners?success=balance_subtracted');
+  } catch (error) {
+    console.error('Subtract balance error:', error);
+    res.redirect('/admin/partners?error=balance_subtract');
+  }
+});
+
 // Handle user inviter change
 router.post('/users/:id/change-inviter', requireAdmin, async (req, res) => {
   try {
@@ -1140,6 +1218,10 @@ router.get('/partners', requireAdmin, async (req, res) => {
         ${req.query.success === 'inviter_changed' ? '<div class="alert alert-success">✅ Пригласитель успешно изменен</div>' : ''}
         ${req.query.error === 'inviter_not_found' ? '<div class="alert alert-error">❌ Пригласитель с таким кодом не найден</div>' : ''}
         ${req.query.error === 'inviter_change' ? '<div class="alert alert-error">❌ Ошибка при смене пригласителя</div>' : ''}
+        ${req.query.success === 'balance_added' ? '<div class="alert alert-success">✅ Баланс успешно пополнен</div>' : ''}
+        ${req.query.success === 'balance_subtracted' ? '<div class="alert alert-success">✅ Баланс успешно списан</div>' : ''}
+        ${req.query.error === 'balance_add' ? '<div class="alert alert-error">❌ Ошибка при пополнении баланса</div>' : ''}
+        ${req.query.error === 'balance_subtract' ? '<div class="alert alert-error">❌ Ошибка при списании баланса</div>' : ''}
         <style>
           .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px; }
           .change-inviter-btn:hover { background: #059669; }
@@ -1162,10 +1244,20 @@ router.get('/partners', requireAdmin, async (req, res) => {
           <td>Нет данных</td>
           <td>${new Date(partner.createdAt).toLocaleDateString()}</td>
           <td>
-            <form method="post" action="/admin/partners/${partner.id}/change-inviter" style="display: inline;">
-              <input type="text" name="newInviterCode" placeholder="Код пригласителя" style="width: 120px; padding: 4px;" required>
-              <button type="submit" class="change-inviter-btn" onclick="return confirm('Изменить пригласителя для ${partner.user.firstName || 'пользователя'}?')">🔄</button>
-            </form>
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+              <form method="post" action="/admin/partners/${partner.id}/change-inviter" style="display: inline;">
+                <input type="text" name="newInviterCode" placeholder="Код пригласителя" style="width: 120px; padding: 4px; font-size: 11px;" required>
+                <button type="submit" class="change-inviter-btn" onclick="return confirm('Изменить пригласителя для ${partner.user.firstName || 'пользователя'}?')" style="padding: 4px 8px; font-size: 11px;">🔄</button>
+              </form>
+              <form method="post" action="/admin/partners/${partner.id}/add-balance" style="display: inline;">
+                <input type="number" name="amount" placeholder="Сумма" style="width: 80px; padding: 4px; font-size: 11px;" step="0.01" required>
+                <button type="submit" class="balance-btn" style="background: #28a745; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 2px;">💰+</button>
+              </form>
+              <form method="post" action="/admin/partners/${partner.id}/subtract-balance" style="display: inline;">
+                <input type="number" name="amount" placeholder="Сумма" style="width: 80px; padding: 4px; font-size: 11px;" step="0.01" required>
+                <button type="submit" class="balance-btn" style="background: #dc3545; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 2px;">💰-</button>
+              </form>
+            </div>
           </td>
         </tr>
       `;
@@ -1534,8 +1626,21 @@ router.get('/orders', requireAdmin, async (req, res) => {
       <body>
         <h2>📦 Управление заказами</h2>
         <a href="/admin" class="btn">← Назад</a>
+        
+        ${req.query.success === 'order_updated' ? '<div class="alert alert-success">✅ Статус заказа обновлен</div>' : ''}
+        ${req.query.error === 'order_update' ? '<div class="alert alert-error">❌ Ошибка при обновлении статуса заказа</div>' : ''}
+        <style>
+          .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+          .status-new { background: #fff3cd; color: #856404; }
+          .status-processing { background: #d1ecf1; color: #0c5460; }
+          .status-completed { background: #d4edda; color: #155724; }
+          .status-cancelled { background: #f8d7da; color: #721c24; }
+          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
+          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        </style>
         <table>
-          <tr><th>ID</th><th>Пользователь</th><th>Статус</th><th>Контакт</th><th>Сообщение</th><th>Создан</th></tr>
+          <tr><th>ID</th><th>Пользователь</th><th>Статус</th><th>Контакт</th><th>Сообщение</th><th>Создан</th><th>Действия</th></tr>
     `;
 
     orders.forEach(order => {
@@ -1543,10 +1648,25 @@ router.get('/orders', requireAdmin, async (req, res) => {
         <tr>
           <td>${order.id.substring(0, 8)}...</td>
           <td>${order.user?.firstName || 'Не указан'}</td>
-          <td>${order.status}</td>
+          <td>
+            <span class="status-badge status-${order.status.toLowerCase()}">${order.status}</span>
+          </td>
           <td>${order.contact || 'Не указан'}</td>
           <td>${order.message.substring(0, 50)}${order.message.length > 50 ? '...' : ''}</td>
           <td>${new Date(order.createdAt).toLocaleDateString()}</td>
+          <td>
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+              <form method="post" action="/admin/orders/${order.id}/update-status" style="display: inline;">
+                <select name="status" style="padding: 4px; font-size: 11px;">
+                  <option value="NEW" ${order.status === 'NEW' ? 'selected' : ''}>Новый</option>
+                  <option value="PROCESSING" ${order.status === 'PROCESSING' ? 'selected' : ''}>В обработке</option>
+                  <option value="COMPLETED" ${order.status === 'COMPLETED' ? 'selected' : ''}>Выполнен</option>
+                  <option value="CANCELLED" ${order.status === 'CANCELLED' ? 'selected' : ''}>Отменен</option>
+                </select>
+                <button type="submit" style="background: #007bff; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 2px;">Обновить</button>
+              </form>
+            </div>
+          </td>
         </tr>
       `;
     });
