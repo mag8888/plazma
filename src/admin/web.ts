@@ -478,16 +478,40 @@ router.get('/', requireAdmin, async (req, res) => {
           .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
           
           /* Product Form Styles */
-          .form-row { display: flex; gap: 20px; margin-bottom: 15px; }
-          .form-row .form-group { flex: 1; }
-          .regions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
-          .regions-grid label { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f8f9fa; border-radius: 8px; cursor: pointer; border: 1px solid #e9ecef; }
-          .regions-grid label:hover { background: #eef2f6; }
+          .product-modal { max-width: 920px; width: min(920px, 92%); padding: 28px 32px; }
+          .product-form { display: flex; flex-direction: column; gap: 24px; }
+          .product-section { background: #f8f9fb; border: 1px solid #e9ecef; border-radius: 12px; padding: 20px 24px; box-shadow: 0 18px 22px -18px rgba(15, 23, 42, 0.35); }
+          .product-section-header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px; }
+          .product-section-title { font-size: 17px; font-weight: 600; color: #212529; }
+          .product-section-subtitle { font-size: 13px; color: #6c757d; }
+          .product-grid { display: grid; gap: 18px; }
+          .product-grid.two-columns { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+          .product-grid.media-layout { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: stretch; }
+          .product-form textarea { resize: vertical; }
+          #productShortDescription { min-height: 100px; }
+          #productFullDescription { min-height: 160px; }
+          .category-picker { display: flex; gap: 12px; }
+          .category-picker select { flex: 1; }
+          .category-picker .btn { padding: 8px 14px; border-radius: 8px; }
+          .regions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+          .regions-grid label { display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: linear-gradient(135deg, #f8f9fa, #eef1f6); border-radius: 10px; cursor: pointer; border: 1px solid #e1e5eb; transition: all 0.2s ease; }
+          .regions-grid label:hover { border-color: #cfd6df; box-shadow: 0 8px 18px -12px rgba(41, 72, 125, 0.45); }
           .switch-row input { transform: scale(1.2); }
           .char-count { text-align: right; font-size: 12px; color: #6c757d; margin-top: 5px; }
-          .file-info { font-size: 12px; color: #6c757d; margin-top: 5px; }
-          .image-upload { display: flex; align-items: center; gap: 12px; }
-          .image-preview { width: 120px; height: 120px; border-radius: 8px; background: #f1f3f5 center/cover no-repeat; border: 1px solid #dee2e6; }
+          .file-info { font-size: 12px; color: #6c757d; }
+          .product-media { display: grid; grid-template-columns: 150px 1fr; gap: 16px; align-items: center; }
+          .image-preview { width: 150px; height: 150px; border-radius: 12px; background: #f1f3f5 center/cover no-repeat; border: 1px solid #dee2e6; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6); }
+          .image-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+          .image-controls input[type="file"] { cursor: pointer; }
+          .image-controls .file-info { margin-top: 4px; }
+          .media-group label { margin-bottom: 10px; display: block; }
+          .status-toggle { display: inline-flex; align-items: center; gap: 12px; font-weight: 500; color: #343a40; cursor: pointer; }
+          .status-toggle input { transform: scale(1.15); }
+          @media (max-width: 768px) {
+            .product-modal { width: 94%; padding: 20px; }
+            .product-section { padding: 18px 20px; }
+            .product-media { grid-template-columns: 1fr; }
+          }
         </style>
       </head>
       <body>
@@ -704,75 +728,94 @@ router.get('/', requireAdmin, async (req, res) => {
 
         <!-- Add Product Modal -->
         <div id="addProductModal" class="modal">
-          <div class="modal-content" style="max-width: 800px;">
+          <div class="modal-content product-modal">
             <div class="modal-header">
               <h2>➕ Добавить новый товар</h2>
               <span class="close" onclick="closeAddProductModal()">&times;</span>
             </div>
             
-            <form id="addProductForm">
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Название товара *</label>
-                  <input type="text" id="productName" required placeholder="Введите название товара">
+            <form id="addProductForm" class="product-form">
+              <div class="product-section">
+                <div class="product-section-header">
+                  <span class="product-section-title">Основные параметры</span>
+                  <span class="product-section-subtitle">Название, стоимость и наличие товара</span>
                 </div>
-                <div class="form-group">
-                  <label>Цена (PZ) *</label>
-                  <input type="number" id="productPrice" step="0.01" min="0" required placeholder="0.00">
-                </div>
-              </div>
-              
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Категория *</label>
-                  <div style="display: flex; gap: 10px;">
-                    <select id="productCategory" required style="flex: 1;">
-                      <option value="">Выберите категорию</option>
-                    </select>
-                    <button type="button" class="btn" onclick="openAddCategoryModal()" style="background: #17a2b8; padding: 8px 12px;">+</button>
+                <div class="product-grid two-columns">
+                  <div class="form-group">
+                    <label>Название товара *</label>
+                    <input type="text" id="productName" required placeholder="Введите название товара">
+                  </div>
+                  <div class="form-group">
+                    <label>Цена (PZ) *</label>
+                    <input type="number" id="productPrice" step="0.01" min="0" required placeholder="0.00">
+                  </div>
+                  <div class="form-group">
+                    <label>Категория *</label>
+                    <div class="category-picker">
+                      <select id="productCategory" required>
+                        <option value="">Выберите категорию</option>
+                      </select>
+                      <button type="button" class="btn" onclick="openAddCategoryModal()" style="background: #17a2b8;">+</button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Количество на складе</label>
+                    <input type="number" id="productStock" min="0" placeholder="0">
                   </div>
                 </div>
-                <div class="form-group">
-                  <label>Количество на складе</label>
-                  <input type="number" id="productStock" min="0" placeholder="0">
-                </div>
               </div>
-              
-              <div class="form-group">
-                <label>Регионы доставки *</label>
+
+              <div class="product-section">
+                <div class="product-section-header">
+                  <span class="product-section-title">Доставка</span>
+                  <span class="product-section-subtitle">Выберите регионы, где товар доступен</span>
+                </div>
                 <div class="regions-grid">
                   <label class="switch-row"><input type="checkbox" id="regionRussia" checked> 🇷🇺 Россия</label>
                   <label class="switch-row"><input type="checkbox" id="regionBali"> 🇮🇩 Бали</label>
                 </div>
               </div>
-              
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Краткое описание *</label>
-                  <textarea id="productShortDescription" required placeholder="Краткое описание товара (до 200 символов)" maxlength="200" style="height: 80px;"></textarea>
-                  <div class="char-count" id="shortDescCount">0/200</div>
+
+              <div class="product-section">
+                <div class="product-section-header">
+                  <span class="product-section-title">Описание и медиа</span>
+                  <span class="product-section-subtitle">Добавьте текст и изображение для карточки товара</span>
                 </div>
-                <div class="form-group">
-                  <label>Фото товара</label>
-                  <div class="image-upload">
-                    <div id="imagePreview" class="image-preview"></div>
-                    <input type="file" id="productImage" accept="image/*">
-                    <div class="file-info">Квадратное фото 1:1, ~800x800px, JPG/PNG</div>
+                <div class="product-grid media-layout">
+                  <div class="form-group">
+                    <label>Краткое описание *</label>
+                    <textarea id="productShortDescription" required placeholder="Краткое описание товара (до 200 символов)" maxlength="200"></textarea>
+                    <div class="char-count" id="shortDescCount">0/200</div>
+                  </div>
+                  <div class="form-group media-group">
+                    <label>Фото товара</label>
+                    <div class="product-media">
+                      <div id="imagePreview" class="image-preview"></div>
+                      <div class="image-controls">
+                        <input type="file" id="productImage" accept="image/*">
+                        <div class="file-info">Квадратное фото 1:1, ~800x800px, JPG/PNG</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
+                <div class="form-group">
+                  <label>Полное описание *</label>
+                  <textarea id="productFullDescription" required placeholder="Подробное описание товара"></textarea>
+                </div>
               </div>
-              
-              <div class="form-group">
-                <label>Полное описание *</label>
-                <textarea id="productFullDescription" required placeholder="Подробное описание товара" style="height: 140px;"></textarea>
+
+              <div class="product-section">
+                <div class="product-section-header">
+                  <span class="product-section-title">Публикация</span>
+                  <span class="product-section-subtitle">Управляйте доступностью товара</span>
+                </div>
+                <div class="form-group">
+                  <label class="status-toggle">
+                    <input type="checkbox" id="productActive"> Товар активен (доступен для покупки)
+                  </label>
+                </div>
               </div>
-              
-              <div class="form-group">
-                <label>
-                  <input type="checkbox" id="productActive"> Товар активен (доступен для покупки)
-                </label>
-              </div>
-              
+
               <div class="modal-footer">
                 <button type="button" class="btn" onclick="closeAddProductModal()" style="background: #6c757d;">Отмена</button>
                 <button type="submit" class="btn" style="background: #28a745;">💾 Создать товар</button>
