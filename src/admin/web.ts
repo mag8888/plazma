@@ -184,21 +184,44 @@ router.get('/', requireAdmin, async (req, res) => {
 
         return `
           <div class="detailed-users-container">
+            <div class="table-controls" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+              <div class="sort-controls">
+                <label>Сортировать по:</label>
+                <select id="sortBy" onchange="applySorting()">
+                  <option value="name">Имени</option>
+                  <option value="balance">Балансу</option>
+                  <option value="partners">Партнёрам</option>
+                  <option value="orders">Заказам</option>
+                  <option value="activity">Активности</option>
+                </select>
+                <select id="sortOrder" onchange="applySorting()">
+                  <option value="asc">По возрастанию</option>
+                  <option value="desc">По убыванию</option>
+                </select>
+              </div>
+              <div class="message-controls">
+                <button class="btn" onclick="selectAllUsers()">Выбрать всех</button>
+                <button class="btn" onclick="deselectAllUsers()">Снять выбор</button>
+                <button class="btn" onclick="openMessageComposer()" style="background: #28a745;">📨 Отправить сообщение</button>
+              </div>
+            </div>
             <div class="users-table-container">
               <table class="users-table">
                 <thead>
                   <tr>
-                    <th>Пользователь</th>
-                    <th>Баланс</th>
-                    <th>Партнёры</th>
-                    <th>Заказы</th>
-                    <th>Последняя активность</th>
+                    <th><input type="checkbox" id="selectAll" onchange="toggleAllUsers()"></th>
+                    <th onclick="sortTable('name')" style="cursor: pointer;">Пользователь ↕️</th>
+                    <th onclick="sortTable('balance')" style="cursor: pointer;">Баланс ↕️</th>
+                    <th onclick="sortTable('partners')" style="cursor: pointer;">Партнёры ↕️</th>
+                    <th onclick="sortTable('orders')" style="cursor: pointer;">Заказы ↕️</th>
+                    <th onclick="sortTable('activity')" style="cursor: pointer;">Последняя активность ↕️</th>
                     <th>Действия</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${usersWithStats.map(user => `
-                    <tr>
+                    <tr data-user-id="${user.id}" data-name="${user.firstName || 'Без имени'}" data-balance="${user.balance}" data-partners="${user.totalPartners}" data-orders="${user.totalOrderSum}" data-activity="${user.lastActivity.getTime()}">
+                      <td><input type="checkbox" class="user-checkbox" value="${user.id}"></td>
                       <td>
                         <div class="user-info">
                           <div class="user-avatar">${(user.firstName || 'U')[0].toUpperCase()}</div>
@@ -423,6 +446,33 @@ router.get('/', requireAdmin, async (req, res) => {
           .action-btn:hover { background: #0056b3; }
           .action-btn.hierarchy { background: #28a745; }
           .action-btn.hierarchy:hover { background: #1e7e34; }
+          
+          /* Table Controls Styles */
+          .table-controls { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; }
+          .sort-controls label { font-weight: 600; margin-right: 10px; }
+          .sort-controls select { margin-right: 10px; padding: 5px; border: 1px solid #ced4da; border-radius: 4px; }
+          .message-controls { display: flex; gap: 10px; }
+          .message-controls .btn { padding: 8px 12px; font-size: 14px; }
+          
+          /* Checkbox Styles */
+          .user-checkbox { transform: scale(1.2); cursor: pointer; }
+          #selectAll { transform: scale(1.2); cursor: pointer; }
+          
+          /* Sortable Headers */
+          th[onclick] { user-select: none; }
+          th[onclick]:hover { background: #e9ecef; }
+          
+          /* Message Composer Modal */
+          .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+          .modal-content { background-color: white; margin: 5% auto; padding: 20px; border-radius: 8px; width: 80%; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+          .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+          .close { color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
+          .close:hover { color: #000; }
+          .form-group { margin-bottom: 15px; }
+          .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+          .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; }
+          .form-group textarea { height: 100px; resize: vertical; }
+          .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
         </style>
       </head>
       <body>
@@ -577,6 +627,65 @@ router.get('/', requireAdmin, async (req, res) => {
           </div>
         </div>
         
+        <!-- Message Composer Modal -->
+        <div id="messageModal" class="modal">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h2>📨 Отправить сообщение пользователям</h2>
+              <span class="close" onclick="closeMessageComposer()">&times;</span>
+            </div>
+            
+            <div class="form-group">
+              <label>Выбранные получатели:</label>
+              <div id="selectedUsers" style="background: #f8f9fa; padding: 10px; border-radius: 4px; max-height: 100px; overflow-y: auto;"></div>
+            </div>
+            
+            <div class="form-group">
+              <label>Тип сообщения:</label>
+              <select id="messageType">
+                <option value="text">Текстовое сообщение</option>
+                <option value="notification">Уведомление</option>
+                <option value="promotion">Акция/Предложение</option>
+                <option value="system">Системное сообщение</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>Тема сообщения:</label>
+              <input type="text" id="messageSubject" placeholder="Введите тему сообщения">
+            </div>
+            
+            <div class="form-group">
+              <label>Текст сообщения:</label>
+              <textarea id="messageText" placeholder="Введите текст сообщения" required></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="includeButtons"> Включить кнопки действий
+              </label>
+            </div>
+            
+            <div id="buttonsSection" style="display: none;">
+              <div class="form-group">
+                <label>Кнопка 1:</label>
+                <input type="text" id="button1Text" placeholder="Текст кнопки">
+                <input type="text" id="button1Url" placeholder="URL или команда">
+              </div>
+              <div class="form-group">
+                <label>Кнопка 2:</label>
+                <input type="text" id="button2Text" placeholder="Текст кнопки">
+                <input type="text" id="button2Url" placeholder="URL или команда">
+              </div>
+            </div>
+            
+            <div class="modal-footer">
+              <button class="btn" onclick="closeMessageComposer()" style="background: #6c757d;">Отмена</button>
+              <button class="btn" onclick="sendMessages()" style="background: #28a745;">📤 Отправить</button>
+            </div>
+          </div>
+        </div>
+        
         <script>
           function switchTab(tabName) {
             // Hide all tab contents
@@ -601,6 +710,170 @@ router.get('/', requireAdmin, async (req, res) => {
           function showUserDetails(userId) {
             window.open(\`/admin/users/\${userId}\`, '_blank', 'width=600,height=400');
           }
+          
+          // Sorting functionality
+          function sortTable(column) {
+            const sortBy = document.getElementById('sortBy');
+            const sortOrder = document.getElementById('sortOrder');
+            
+            // Set the sort parameters
+            switch(column) {
+              case 'name': sortBy.value = 'name'; break;
+              case 'balance': sortBy.value = 'balance'; break;
+              case 'partners': sortBy.value = 'partners'; break;
+              case 'orders': sortBy.value = 'orders'; break;
+              case 'activity': sortBy.value = 'activity'; break;
+            }
+            
+            applySorting();
+          }
+          
+          function applySorting() {
+            const sortBy = document.getElementById('sortBy').value;
+            const sortOrder = document.getElementById('sortOrder').value;
+            const tbody = document.querySelector('.users-table tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            rows.sort((a, b) => {
+              let aVal, bVal;
+              
+              switch(sortBy) {
+                case 'name':
+                  aVal = a.dataset.name.toLowerCase();
+                  bVal = b.dataset.name.toLowerCase();
+                  break;
+                case 'balance':
+                  aVal = parseFloat(a.dataset.balance);
+                  bVal = parseFloat(b.dataset.balance);
+                  break;
+                case 'partners':
+                  aVal = parseInt(a.dataset.partners);
+                  bVal = parseInt(b.dataset.partners);
+                  break;
+                case 'orders':
+                  aVal = parseFloat(a.dataset.orders);
+                  bVal = parseFloat(b.dataset.orders);
+                  break;
+                case 'activity':
+                  aVal = parseInt(a.dataset.activity);
+                  bVal = parseInt(b.dataset.activity);
+                  break;
+                default:
+                  return 0;
+              }
+              
+              if (sortOrder === 'asc') {
+                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+              } else {
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+              }
+            });
+            
+            // Re-append sorted rows
+            rows.forEach(row => tbody.appendChild(row));
+          }
+          
+          // Checkbox functionality
+          function toggleAllUsers() {
+            const selectAll = document.getElementById('selectAll');
+            const checkboxes = document.querySelectorAll('.user-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+          }
+          
+          function selectAllUsers() {
+            const checkboxes = document.querySelectorAll('.user-checkbox');
+            checkboxes.forEach(cb => cb.checked = true);
+            document.getElementById('selectAll').checked = true;
+          }
+          
+          function deselectAllUsers() {
+            const checkboxes = document.querySelectorAll('.user-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            document.getElementById('selectAll').checked = false;
+          }
+          
+          // Message composer functionality
+          function openMessageComposer() {
+            const selectedUsers = getSelectedUsers();
+            if (selectedUsers.length === 0) {
+              alert('Выберите пользователей для отправки сообщения');
+              return;
+            }
+            
+            document.getElementById('selectedUsers').innerHTML = selectedUsers.map(u => 
+              \`<span style="background: #e3f2fd; padding: 2px 8px; border-radius: 12px; margin: 2px; display: inline-block;">\${u.name}</span>\`
+            ).join('');
+            
+            document.getElementById('messageModal').style.display = 'block';
+          }
+          
+          function closeMessageComposer() {
+            document.getElementById('messageModal').style.display = 'none';
+          }
+          
+          function getSelectedUsers() {
+            const checkboxes = document.querySelectorAll('.user-checkbox:checked');
+            return Array.from(checkboxes).map(cb => {
+              const row = cb.closest('tr');
+              return {
+                id: cb.value,
+                name: row.dataset.name
+              };
+            });
+          }
+          
+          function sendMessages() {
+            const selectedUsers = getSelectedUsers();
+            const messageType = document.getElementById('messageType').value;
+            const subject = document.getElementById('messageSubject').value;
+            const text = document.getElementById('messageText').value;
+            
+            if (!text.trim()) {
+              alert('Введите текст сообщения');
+              return;
+            }
+            
+            // Send to server
+            fetch('/admin/send-messages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userIds: selectedUsers.map(u => u.id),
+                type: messageType,
+                subject: subject,
+                text: text,
+                includeButtons: document.getElementById('includeButtons').checked,
+                button1: {
+                  text: document.getElementById('button1Text').value,
+                  url: document.getElementById('button1Url').value
+                },
+                button2: {
+                  text: document.getElementById('button2Text').value,
+                  url: document.getElementById('button2Url').value
+                }
+              })
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                alert(\`Сообщения отправлены \${data.sent} пользователям\`);
+                closeMessageComposer();
+              } else {
+                alert('Ошибка при отправке: ' + data.error);
+              }
+            })
+            .catch(error => {
+              alert('Ошибка: ' + error.message);
+            });
+          }
+          
+          // Show/hide buttons section
+          document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('includeButtons').addEventListener('change', function() {
+              const buttonsSection = document.getElementById('buttonsSection');
+              buttonsSection.style.display = this.checked ? 'block' : 'none';
+            });
+          });
         </script>
       </body>
       </html>
@@ -881,6 +1154,91 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Detailed users page error:', error);
     res.status(500).send('Ошибка загрузки страницы пользователей');
+  }
+});
+
+// Send messages to users
+router.post('/send-messages', requireAdmin, async (req, res) => {
+  try {
+    const { userIds, type, subject, text, includeButtons, button1, button2 } = req.body;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'Не выбраны получатели' });
+    }
+    
+    if (!text || !text.trim()) {
+      return res.status(400).json({ success: false, error: 'Не указан текст сообщения' });
+    }
+    
+    // For now, just log the messages (bot integration will be added later)
+    let sentCount = 0;
+    let errors = [];
+    
+    // Validate users and prepare messages
+    for (const userId of userIds) {
+      try {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+          errors.push(`Пользователь ${userId} не найден`);
+          continue;
+        }
+        
+        // Build message text
+        let messageText = '';
+        if (subject) {
+          messageText += `📢 **${subject}**\n\n`;
+        }
+        messageText += text;
+        
+        // Add type indicator
+        const typeEmojiMap: { [key: string]: string } = {
+          'text': '💬',
+          'notification': '🔔',
+          'promotion': '🎉',
+          'system': '⚙️'
+        };
+        const typeEmoji = typeEmojiMap[type] || '💬';
+        
+        messageText = `${typeEmoji} ${messageText}`;
+        
+        // Log the message for now (bot sending will be implemented later)
+        console.log(`📨 Message prepared for user ${user.firstName} (${user.id}):`, messageText);
+        
+        // Log the message
+        await prisma.userHistory.create({
+          data: {
+            userId: user.id,
+            action: 'admin_message_sent',
+            payload: {
+              type,
+              subject,
+              messageLength: text.length,
+              hasButtons: includeButtons,
+              messageText: messageText,
+              status: 'prepared' // Will be 'sent' when bot integration is complete
+            }
+          }
+        });
+        
+        sentCount++;
+        
+      } catch (error) {
+        console.error(`Error preparing message for user ${userId}:`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errors.push(`Ошибка подготовки сообщения пользователю ${userId}: ${errorMessage}`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      sent: sentCount,
+      total: userIds.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+    
+  } catch (error) {
+    console.error('Send messages error:', error);
+    res.status(500).json({ success: false, error: 'Внутренняя ошибка сервера' });
   }
 });
 
