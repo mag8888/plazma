@@ -83,9 +83,22 @@ router.get('/', requireAdmin, async (req, res) => {
   try {
     // Calculate total balance of all partners (balance = total bonuses)
     const partners = await prisma.partnerProfile.findMany({
-      select: { balance: true }
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        transactions: true
+      }
     });
     const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
+    
+    // Debug: Log partner balances
+    console.log('🔍 Debug: Partner balances:');
+    partners.forEach(partner => {
+      console.log(`  - ${partner.user.firstName || 'User'}: balance=${partner.balance}, transactions=${partner.transactions.length}`);
+      partner.transactions.forEach(tx => {
+        console.log(`    * ${tx.type} ${tx.amount} PZ - ${tx.description}`);
+      });
+    });
+    console.log(`🔍 Debug: Total calculated balance: ${totalBalance} PZ`);
 
     const stats = {
       categories: await prisma.category.count(),
@@ -175,6 +188,7 @@ router.get('/', requireAdmin, async (req, res) => {
             <div class="list-info">
               <div class="list-name">${tx.profile.user.firstName || 'Партнёр'}</div>
               <div class="list-time">${tx.createdAt.toLocaleString('ru-RU')}</div>
+              <div style="font-size: 11px; color: #999; margin-top: 2px;">${tx.description}</div>
             </div>
             <div class="list-amount ${tx.amount < 0 ? 'negative' : ''}">
               ${tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)} PZ
@@ -249,6 +263,9 @@ router.get('/', requireAdmin, async (req, res) => {
             <h1>🚀 Админ-панель Plazma Water v2.0</h1>
             <p>Единое управление ботом, пользователями и партнёрами</p>
           </div>
+          
+          ${req.query.success === 'all_bonuses_recalculated' ? `<div class="alert alert-success">✅ Все бонусы пересчитаны! Общий баланс: ${req.query.total || 0} PZ</div>` : ''}
+          ${req.query.error === 'bonus_recalculation' ? '<div class="alert alert-error">❌ Ошибка при пересчёте бонусов</div>' : ''}
           
           <div class="tabs">
             <button class="tab active" onclick="switchTab('overview')">📊 Обзор</button>
@@ -364,9 +381,10 @@ router.get('/', requireAdmin, async (req, res) => {
           <div id="tools" class="tab-content">
             <div class="section-header">
               <h2 class="section-title">🔧 Инструменты и утилиты</h2>
-              <div class="action-buttons">
-                <a href="/admin/test-referral-links" class="btn">🧪 Тест ссылок</a>
-              </div>
+            <div class="action-buttons">
+              <a href="/admin/test-referral-links" class="btn">🧪 Тест ссылок</a>
+              <a href="/admin/force-recalculate-all-bonuses" class="btn" style="background: #28a745;">🔄 Пересчитать все бонусы</a>
+            </div>
             </div>
             <p>Дополнительные инструменты для отладки и тестирования.</p>
           </div>
@@ -900,6 +918,53 @@ router.get('/users/:userId', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ User details page error:', error);
     res.status(500).send('Ошибка загрузки деталей пользователя');
+  }
+});
+
+// Force recalculate all partner bonuses
+router.post('/force-recalculate-all-bonuses', requireAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Starting force recalculation of all partner bonuses...');
+    
+    // Get all partner profiles
+    const partners = await prisma.partnerProfile.findMany({
+      include: { transactions: true }
+    });
+    
+    console.log(`📊 Found ${partners.length} partner profiles to recalculate`);
+    
+    let totalRecalculated = 0;
+    
+    for (const partner of partners) {
+      console.log(`🔄 Recalculating bonuses for partner ${partner.id}...`);
+      
+      // Calculate total from all transactions
+      const totalBonus = partner.transactions.reduce((sum, tx) => {
+        const amount = tx.type === 'CREDIT' ? tx.amount : -tx.amount;
+        console.log(`  - Transaction: ${tx.type} ${tx.amount} PZ (${tx.description})`);
+        return sum + amount;
+      }, 0);
+      
+      console.log(`💰 Calculated total bonus for partner ${partner.id}: ${totalBonus} PZ`);
+      
+      // Update both balance and bonus fields
+      await prisma.partnerProfile.update({
+        where: { id: partner.id },
+        data: {
+          balance: totalBonus,
+          bonus: totalBonus
+        }
+      });
+      
+      totalRecalculated += totalBonus;
+      console.log(`✅ Updated partner ${partner.id}: balance = ${totalBonus} PZ, bonus = ${totalBonus} PZ`);
+    }
+    
+    console.log(`🎉 Force recalculation completed! Total recalculated: ${totalRecalculated} PZ`);
+    res.redirect('/admin?success=all_bonuses_recalculated&total=' + totalRecalculated);
+  } catch (error) {
+    console.error('❌ Force recalculate all bonuses error:', error);
+    res.redirect('/admin?error=bonus_recalculation');
   }
 });
 
