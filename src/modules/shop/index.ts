@@ -12,12 +12,27 @@ const CATEGORY_ACTION_PREFIX = 'shop:cat:';
 const PRODUCT_MORE_PREFIX = 'shop:prod:more:';
 const PRODUCT_CART_PREFIX = 'shop:prod:cart:';
 const PRODUCT_BUY_PREFIX = 'shop:prod:buy:';
+const REGION_SELECT_PREFIX = 'shop:region:';
 
-export async function showCategories(ctx: Context) {
-  await logUserAction(ctx, 'shop:open');
+export async function showRegionSelection(ctx: Context) {
+  await logUserAction(ctx, 'shop:region_selection');
+  
+  await ctx.reply(
+    '🌍 Выберите ваш регион для просмотра доступных товаров:',
+    Markup.inlineKeyboard([
+      [
+        Markup.button.callback('🇷🇺 Россия', `${REGION_SELECT_PREFIX}RUSSIA`),
+        Markup.button.callback('🇮🇩 Бали', `${REGION_SELECT_PREFIX}BALI`)
+      ]
+    ])
+  );
+}
+
+export async function showCategories(ctx: Context, region?: string) {
+  await logUserAction(ctx, 'shop:open', { region });
   
   try {
-    console.log('🛍️ Loading categories...');
+    console.log('🛍️ Loading categories for region:', region);
     const categories = await getActiveCategories();
     console.log('🛍️ Found active categories:', categories.length);
     
@@ -35,14 +50,27 @@ export async function showCategories(ctx: Context) {
     }
 
     // Show catalog with products grouped by categories
-    await ctx.reply('🛍️ Каталог товаров Plazma Water\n\nВыберите категорию:', {
+    const regionEmoji = region === 'RUSSIA' ? '🇷🇺' : region === 'BALI' ? '🇮🇩' : '🌍';
+    const regionText = region === 'RUSSIA' ? 'Россия' : region === 'BALI' ? 'Бали' : 'Все регионы';
+    
+    const keyboard = [
+      ...categories.map((category: any) => [
+        {
+          text: `📂 ${category.name}`,
+          callback_data: `${CATEGORY_ACTION_PREFIX}${category.id}`,
+        },
+      ]),
+      [
+        {
+          text: `🔄 Сменить регион (${regionEmoji} ${regionText})`,
+          callback_data: `${REGION_SELECT_PREFIX}change`,
+        },
+      ]
+    ];
+
+    await ctx.reply(`🛍️ Каталог товаров Plazma Water\n\n📍 Регион: ${regionEmoji} ${regionText}\n\nВыберите категорию:`, {
       reply_markup: {
-        inline_keyboard: categories.map((category: any) => [
-          {
-            text: `📂 ${category.name}`,
-            callback_data: `${CATEGORY_ACTION_PREFIX}${category.id}`,
-          },
-        ]),
+        inline_keyboard: keyboard,
       },
     });
   } catch (error) {
@@ -57,7 +85,7 @@ function formatProductMessage(product: { title: string; summary: string; price: 
   return `💧 ${product.title}\n${product.summary}\n\nЦена: ${rubPrice} ₽ / ${pzPrice} PZ`;
 }
 
-async function sendProductCards(ctx: Context, categoryId: string) {
+async function sendProductCards(ctx: Context, categoryId: string, region?: string) {
   try {
     const category = await getCategoryById(categoryId);
     if (!category) {
@@ -65,9 +93,18 @@ async function sendProductCards(ctx: Context, categoryId: string) {
       return;
     }
 
-    const products = await getProductsByCategory(categoryId);
+    let products = await getProductsByCategory(categoryId);
+    
+    // Filter products by region
+    if (region === 'RUSSIA') {
+      products = products.filter((product: any) => product.availableInRussia);
+    } else if (region === 'BALI') {
+      products = products.filter((product: any) => product.availableInBali);
+    }
+    
     if (products.length === 0) {
-      await ctx.reply(`📂 ${category.name}\n\nВ этой категории пока нет товаров.`);
+      const regionText = region === 'RUSSIA' ? 'России' : region === 'BALI' ? 'Бали' : '';
+      await ctx.reply(`📂 ${category.name}\n\nВ этой категории нет товаров для ${regionText}.`);
       return;
     }
 
@@ -211,15 +248,43 @@ export const shopModule: BotModule = {
     console.log('🛍️ Registering shop module...');
     bot.hears(['Магазин', 'Каталог', '🛒 Магазин'], async (ctx) => {
       console.log('🛍️ Shop button pressed by user:', ctx.from?.id);
-      await showCategories(ctx);
+      await showRegionSelection(ctx);
+    });
+
+    // Handle region selection
+    bot.action(new RegExp(`^${REGION_SELECT_PREFIX}(.+)$`), async (ctx) => {
+      const match = ctx.match as RegExpExecArray;
+      const regionOrAction = match[1];
+      await ctx.answerCbQuery();
+      
+      if (regionOrAction === 'change') {
+        await showRegionSelection(ctx);
+        return;
+      }
+      
+      // Save region to user and show categories
+      const user = await ensureUser(ctx);
+      if (regionOrAction === 'RUSSIA' || regionOrAction === 'BALI') {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { selectedRegion: regionOrAction as any }
+        });
+        await logUserAction(ctx, 'shop:region_selected', { region: regionOrAction });
+        await showCategories(ctx, regionOrAction);
+      }
     });
 
     bot.action(new RegExp(`^${CATEGORY_ACTION_PREFIX}(.+)$`), async (ctx) => {
       const match = ctx.match as RegExpExecArray;
       const categoryId = match[1];
       await ctx.answerCbQuery();
-      await logUserAction(ctx, 'shop:category', { categoryId });
-      await sendProductCards(ctx, categoryId);
+      
+      // Get user's selected region
+      const user = await ensureUser(ctx);
+      const region = user.selectedRegion || 'RUSSIA';
+      
+      await logUserAction(ctx, 'shop:category', { categoryId, region });
+      await sendProductCards(ctx, categoryId, region);
     });
 
     bot.action(new RegExp(`^${PRODUCT_MORE_PREFIX}(.+)$`), async (ctx) => {

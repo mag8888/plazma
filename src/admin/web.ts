@@ -253,6 +253,19 @@ router.get('/', requireAdmin, async (req, res) => {
                   <label>Изображение:</label>
                   <input type="file" name="image" accept="image/*">
                 </div>
+                <div class="form-group">
+                  <label>Регионы доступности:</label>
+                  <div style="margin-top: 10px;">
+                    <label style="display: flex; align-items: center; margin-bottom: 10px;">
+                      <input type="checkbox" name="availableInRussia" checked style="margin-right: 8px;">
+                      🇷🇺 Россия
+                    </label>
+                    <label style="display: flex; align-items: center;">
+                      <input type="checkbox" name="availableInBali" checked style="margin-right: 8px;">
+                      🇮🇩 Бали
+                    </label>
+                  </div>
+                </div>
                 <button type="submit" class="btn btn-success">Добавить товар</button>
               </form>
             </div>
@@ -908,7 +921,7 @@ router.post('/orders/:id/delete', requireAdmin, async (req, res) => {
 // Handle product creation
 router.post('/products', requireAdmin, upload.single('image'), async (req, res) => {
   try {
-    const { title, summary, description, price_rub, categoryId } = req.body;
+    const { title, summary, description, price_rub, categoryId, availableInRussia, availableInBali } = req.body;
 
     const trimmedTitle = typeof title === 'string' ? title.trim() : '';
     const trimmedSummary = typeof summary === 'string' ? summary.trim() : '';
@@ -972,7 +985,9 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
         price: Number.isFinite(pzPrice) ? Number(pzPrice.toFixed(2)) : 0, // Use converted PZ price
         categoryId: trimmedCategoryId,
         imageUrl,
-        isActive: true
+        isActive: true,
+        availableInRussia: availableInRussia === 'on',
+        availableInBali: availableInBali === 'on'
       }
     });
 
@@ -1729,6 +1744,11 @@ router.get('/products', requireAdmin, async (req, res) => {
               </form>
             </div>
             <span class="badge badge-category">${product.categoryName}</span>
+            <div style="margin: 8px 0;">
+              <span style="font-size: 12px; color: #666;">Регионы:</span>
+              ${product.availableInRussia ? '<span style="background: #e3f2fd; color: #1976d2; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 4px;">🇷🇺 Россия</span>' : ''}
+              ${product.availableInBali ? '<span style="background: #f3e5f5; color: #7b1fa2; padding: 2px 6px; border-radius: 4px; font-size: 11px;">🇮🇩 Бали</span>' : ''}
+            </div>
             <p class="product-summary">${product.summary}</p>
             <div class="product-price">${priceFormatted}</div>
             <div class="product-meta">
