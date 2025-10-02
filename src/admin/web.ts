@@ -644,6 +644,52 @@ router.post('/partners/:id/change-inviter', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle user inviter change
+router.post('/users/:id/change-inviter', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newInviterCode } = req.body;
+    
+    // Find the new inviter by referral code
+    const newInviter = await prisma.partnerProfile.findUnique({
+      where: { referralCode: newInviterCode },
+      include: { user: true }
+    });
+    
+    if (!newInviter) {
+      return res.redirect('/admin/users?error=inviter_not_found');
+    }
+    
+    // Find current user
+    const currentUser = await prisma.user.findUnique({
+      where: { id }
+    });
+    
+    if (!currentUser) {
+      return res.redirect('/admin/users?error=user_not_found');
+    }
+    
+    // Delete old referral if exists
+    await prisma.partnerReferral.deleteMany({
+      where: { referredId: id }
+    });
+    
+    // Create new referral
+    await prisma.partnerReferral.create({
+      data: {
+        profileId: newInviter.id,
+        referredId: id,
+        level: 1
+      }
+    });
+    
+    res.redirect('/admin/users?success=inviter_changed');
+  } catch (error) {
+    console.error('Change user inviter error:', error);
+    res.redirect('/admin/users?error=inviter_change');
+  }
+});
+
 // Handle user deletion
 router.post('/users/:id/delete', requireAdmin, async (req, res) => {
   try {
@@ -912,10 +958,15 @@ router.get('/users', requireAdmin, async (req, res) => {
         
         ${req.query.success === 'user_deleted' ? '<div class="alert alert-success">✅ Пользователь успешно удален</div>' : ''}
         ${req.query.error === 'user_delete' ? '<div class="alert alert-error">❌ Ошибка при удалении пользователя</div>' : ''}
+        ${req.query.success === 'inviter_changed' ? '<div class="alert alert-success">✅ Пригласитель успешно изменен</div>' : ''}
+        ${req.query.error === 'inviter_not_found' ? '<div class="alert alert-error">❌ Пригласитель с таким кодом не найден</div>' : ''}
+        ${req.query.error === 'inviter_change' ? '<div class="alert alert-error">❌ Ошибка при смене пригласителя</div>' : ''}
         
         <style>
           .delete-btn { background: #f87171; color: #7f1d1d; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
           .delete-btn:hover { background: #ef4444; }
+          .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 5px; }
+          .change-inviter-btn:hover { background: #059669; }
           .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
           .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
           .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
@@ -935,6 +986,18 @@ router.get('/users', requireAdmin, async (req, res) => {
       }
     });
 
+    // Get all available partners for dropdown
+    const availablePartners = await prisma.partnerProfile.findMany({
+      include: {
+        user: true
+      },
+      orderBy: {
+        user: {
+          firstName: 'asc'
+        }
+      }
+    });
+
     users.forEach(user => {
       // Find who invited this user
       const referral = referrals.find(r => r.referredId === user.id);
@@ -946,7 +1009,20 @@ router.get('/users', requireAdmin, async (req, res) => {
           <td>${user.telegramId}</td>
           <td>${user.firstName || 'Не указано'}</td>
           <td>${user.username ? '@' + user.username : 'Не указано'}</td>
-          <td>${inviterInfo}</td>
+          <td>
+            ${inviterInfo}
+            <div style="margin-top: 5px;">
+              <form method="post" action="/admin/users/${user.id}/change-inviter" style="display: inline;">
+                <select name="newInviterCode" style="width: 140px; padding: 4px; font-size: 11px;" required>
+                  <option value="">Выберите пригласителя</option>
+                  ${availablePartners.map(partner => `
+                    <option value="${partner.referralCode}">${partner.user.firstName || 'Пользователь'} (${partner.referralCode})</option>
+                  `).join('')}
+                </select>
+                <button type="submit" class="change-inviter-btn" onclick="return confirm('Изменить пригласителя для ${user.firstName || user.telegramId}?')" style="padding: 4px 8px; font-size: 11px;">🔄</button>
+              </form>
+            </div>
+          </td>
           <td>${new Date(user.createdAt).toLocaleDateString()}</td>
           <td>${user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Нет данных'}</td>
           <td>
