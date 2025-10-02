@@ -192,7 +192,7 @@ export async function recordPartnerTransaction(profileId: string, amount: number
     },
   });
 
-  // Recalculate total bonus from all transactions
+  // Recalculate total bonus and balance from all transactions
   await recalculatePartnerBonuses(profileId);
 
   return transaction;
@@ -215,15 +215,16 @@ export async function recalculatePartnerBonuses(profileId: string) {
 
   console.log(`💰 Total calculated bonus: ${totalBonus} PZ`);
 
-  // Update partner profile bonus balance
+  // Update both balance and bonus fields
   const updatedProfile = await prisma.partnerProfile.update({
     where: { id: profileId },
     data: {
-      bonus: totalBonus
+      balance: totalBonus,  // Balance = total bonuses
+      bonus: totalBonus     // Bonus = total bonuses (for display)
     }
   });
 
-  console.log(`✅ Updated profile ${profileId}: bonus = ${updatedProfile.bonus} PZ`);
+  console.log(`✅ Updated profile ${profileId}: balance = ${updatedProfile.balance} PZ, bonus = ${updatedProfile.bonus} PZ`);
   return totalBonus;
 }
 

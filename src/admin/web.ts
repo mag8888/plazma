@@ -81,11 +81,11 @@ router.post('/login', (req, res) => {
 // Main admin panel
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    // Calculate total balance of all partners
+    // Calculate total balance of all partners (balance = total bonuses)
     const partners = await prisma.partnerProfile.findMany({
-      select: { balance: true, bonus: true }
+      select: { balance: true }
     });
-    const totalBalance = partners.reduce((sum, partner) => sum + partner.balance + partner.bonus, 0);
+    const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
 
     const stats = {
       categories: await prisma.category.count(),
@@ -585,7 +585,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
           .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         </style>
         <table>
-          <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Бонусы</th><th>Партнёров</th><th>Код</th><th>Пригласитель</th><th>Создан</th><th>Действия</th></tr>
+          <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Всего бонусов</th><th>Партнёров</th><th>Код</th><th>Пригласитель</th><th>Создан</th><th>Действия</th></tr>
     `;
 
     partnersWithInviters.forEach(partner => {
@@ -1543,13 +1543,13 @@ router.get('/debug-partners', requireAdmin, async (req, res) => {
             </div>
             <div style="text-align: right;">
               <div style="font-size: 18px; font-weight: bold; color: #28a745;">${totalBalance.toFixed(2)} PZ</div>
-              <div style="font-size: 12px; color: #666;">Баланс + Бонусы</div>
+              <div style="font-size: 12px; color: #666;">Баланс = Всего бонусов</div>
             </div>
           </div>
           
           <div class="stats">
             <div class="stat">💰 Баланс: ${Number(partner.balance).toFixed(2)} PZ</div>
-            <div class="stat">🎁 Бонусы: ${Number(partner.bonus).toFixed(2)} PZ</div>
+            <div class="stat">🎁 Всего бонусов: ${Number(partner.bonus).toFixed(2)} PZ</div>
             <div class="stat">👥 Всего рефералов: ${referralsCount}</div>
             <div class="stat">📊 Прямых: ${directReferrals}</div>
             <div class="stat">🌐 Мульти: ${multiReferrals}</div>
