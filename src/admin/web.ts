@@ -259,6 +259,1457 @@ router.get('/', requireAdmin, async (req, res) => {
     res.status(500).send('Internal server error');
   }
 });
+            <div class="section">
+              <h3>📁 Категории</h3>
+              <button onclick="openAdminPage('/admin/categories')" class="btn">Управление категориями</button>
+              <form action="/admin/categories" method="post">
+                <div class="form-group">
+                  <label>Название:</label>
+                  <input type="text" name="name" required>
+                </div>
+                <div class="form-group">
+                  <label>Слаг (URL):</label>
+                  <input type="text" name="slug">
+                </div>
+                <div class="form-group">
+                  <label>Описание:</label>
+                  <textarea name="description"></textarea>
+                </div>
+                <button type="submit" class="btn btn-success">Добавить категорию</button>
+              </form>
+            </div>
+
+            <div class="section">
+              <h3>🛍 Товары</h3>
+              <button onclick="openAdminPage('/admin/products')" class="btn">Управление товарами</button>
+              <form action="/admin/products" method="post" enctype="multipart/form-data">
+                <div class="form-group">
+                  <label>Название:</label>
+                  <input type="text" name="title" required>
+                </div>
+                <div class="form-group">
+                  <label>Краткое описание:</label>
+                  <textarea name="summary" required></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Полное описание:</label>
+                  <textarea name="description"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Цена в рублях (₽):</label>
+                  <input type="number" name="price_rub" step="0.01" required placeholder="Например: 5000.00" oninput="updatePZPrice(this.value)">
+                </div>
+                <div class="form-group">
+                  <label>Цена в PZ (автоматически):</label>
+                  <input type="number" name="price" step="0.01" readonly style="background-color: #f5f5f5;">
+                  <small style="color: #666;">1 PZ = 100 ₽ (курс обмена)</small>
+                </div>
+                <script>
+                  function updatePZPrice(rubPrice) {
+                    const pzPrice = rubPrice / 100;
+                    document.querySelector('input[name="price"]').value = pzPrice.toFixed(2);
+                  }
+                </script>
+                <div class="form-group">
+                  <label>Категория:</label>
+                  <select name="categoryId" required>
+                    <option value="">Выберите категорию</option>
+                    ${(await prisma.category.findMany()).map(cat => 
+                      `<option value="${cat.id}">${cat.name}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Изображение:</label>
+                  <input type="file" name="image" accept="image/*">
+                </div>
+                <div class="form-group">
+                  <label>Регионы доступности:</label>
+                  <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="availableInRussia" checked>
+                      <span>🇷🇺 Россия</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="availableInBali" checked>
+                      <span>🇮🇩 Бали</span>
+                    </label>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-success">Добавить товар</button>
+              </form>
+            </div>
+
+            <div class="section">
+              <h3>⭐ Отзывы</h3>
+              <button onclick="openAdminPage('/admin/reviews')" class="btn">Управление отзывами</button>
+              <form action="/admin/reviews" method="post">
+                <div class="form-group">
+                  <label>Имя:</label>
+                  <input type="text" name="name" required>
+                </div>
+                <div class="form-group">
+                  <label>Текст отзыва:</label>
+                  <textarea name="content" required></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Ссылка (опционально):</label>
+                  <input type="url" name="link">
+                </div>
+                <div class="form-group">
+                  <label>
+                    <input type="checkbox" name="isPinned"> Закрепить
+                  </label>
+                </div>
+                <button type="submit" class="btn btn-success">Добавить отзыв</button>
+              </form>
+            </div>
+
+            <div class="section">
+              <h3>👥 Партнёры</h3>
+              <button onclick="openAdminPage('/admin/partners')" class="btn">Управление партнёрами</button>
+              <p>Просмотр всех партнёров и их статистики</p>
+            </div>
+
+            <div class="section">
+              <h3>📦 Заказы</h3>
+              <button onclick="openAdminPage('/admin/orders')" class="btn">Управление заказами</button>
+              <p>Просмотр и обработка заказов</p>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          // Function to open admin pages
+          function openAdminPage(url) {
+            console.log('Opening admin page:', url);
+            window.location.href = url;
+          }
+          
+          // Add admin ID to all requests
+          fetch('/admin', {
+            headers: {
+              'X-Admin-ID': localStorage.getItem('adminId')
+            }
+          });
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Admin panel error:', error);
+    res.status(500).send('Internal server error');
+  }
+});
+
+// Handle category creation
+router.post('/categories', requireAdmin, async (req, res) => {
+  try {
+    const { name, slug, description } = req.body;
+    console.log('Creating category with data:', { name, slug, description });
+
+    // Generate slug from name if not provided
+    let finalSlug = slug;
+    if (!finalSlug && name) {
+      finalSlug = name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single
+        .trim();
+    }
+
+    console.log('Final slug:', finalSlug);
+
+    const category = await prisma.category.create({
+      data: { name, slug: finalSlug || name.toLowerCase(), description, isActive: true }
+    });
+
+    console.log('Category created successfully:', category.id);
+    res.redirect('/admin?success=category');
+  } catch (error) {
+    console.error('Category creation error:', error);
+    console.error('Error details:', error instanceof Error ? error.message : String(error));
+    res.redirect('/admin?error=category');
+  }
+});
+
+// Handle category toggle active status
+router.post('/categories/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const category = await prisma.category.findUnique({ where: { id } });
+    
+    if (!category) {
+      return res.redirect('/admin?error=category_not_found');
+    }
+
+    await prisma.category.update({
+      where: { id },
+      data: { isActive: !category.isActive }
+    });
+
+    res.redirect('/admin?success=category_updated');
+  } catch (error) {
+    console.error('Category toggle error:', error);
+    res.redirect('/admin?error=category_toggle');
+  }
+});
+
+// Handle category deletion
+router.post('/categories/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if category has products
+    const productCount = await prisma.product.count({ where: { categoryId: id } });
+    if (productCount > 0) {
+      return res.redirect('/admin?error=category_has_products');
+    }
+
+    await prisma.category.delete({ where: { id } });
+    res.redirect('/admin?success=category_deleted');
+  } catch (error) {
+    console.error('Category deletion error:', error);
+    res.redirect('/admin?error=category_delete');
+  }
+});
+
+// Handle product toggle active status
+router.post('/products/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      return res.redirect('/admin?error=product_not_found');
+    }
+
+    await prisma.product.update({
+      where: { id },
+      data: { isActive: !product.isActive }
+    });
+
+    res.redirect('/admin?success=product_updated');
+  } catch (error) {
+    console.error('Product toggle error:', error);
+    res.redirect('/admin?error=product_toggle');
+  }
+});
+
+// Handle product image upload
+router.post('/products/:id/upload-image', requireAdmin, upload.single('image'), async (req, res) => {
+  try {
+    console.log('🖼️ Image upload request received');
+    const { id } = req.params;
+    console.log('🖼️ Product ID:', id);
+    
+    const product = await prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      console.log('🖼️ Product not found:', id);
+      return res.redirect('/admin/products?error=product_not_found');
+    }
+
+    console.log('🖼️ Product found:', product.title);
+    console.log('🖼️ Request file:', req.file ? 'present' : 'missing');
+    
+    if (!req.file) {
+      console.log('🖼️ No file uploaded');
+      return res.redirect('/admin/products?error=no_image');
+    }
+
+    console.log('🖼️ File details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+
+    console.log('🖼️ Uploading to Cloudinary...');
+    const result = await new Promise<any>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: 'plazma-bot/products',
+          transformation: [{ width: 800, height: 800, crop: 'fill', quality: 'auto' }],
+        },
+        (error, result) => {
+          if (error) {
+            console.error('🖼️ Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('🖼️ Cloudinary upload success:', result?.secure_url);
+            resolve(result);
+          }
+        },
+      ).end(req.file!.buffer);
+    });
+
+    const imageUrl = result.secure_url;
+    console.log('🖼️ Final image URL:', imageUrl);
+
+    const updatedProduct = await prisma.product.update({
+      where: { id },
+      data: { imageUrl }
+    });
+
+    console.log('🖼️ Database updated, product imageUrl:', updatedProduct.imageUrl);
+    res.redirect('/admin/products?success=image_updated');
+  } catch (error) {
+    console.error('🖼️ Product image upload error:', error);
+    res.redirect('/admin/products?error=image_upload');
+  }
+});
+
+// Handle product deletion
+router.post('/products/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Remove from all carts first
+    await prisma.cartItem.deleteMany({ where: { productId: id } });
+    
+    await prisma.product.delete({ where: { id } });
+    res.redirect('/admin?success=product_deleted');
+  } catch (error) {
+    console.error('Product deletion error:', error);
+    res.redirect('/admin?error=product_delete');
+  }
+});
+
+// Handle review toggle active status
+router.post('/reviews/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const review = await prisma.review.findUnique({ where: { id } });
+    
+    if (!review) {
+      return res.redirect('/admin?error=review_not_found');
+    }
+
+    await prisma.review.update({
+      where: { id },
+      data: { isActive: !review.isActive }
+    });
+
+    res.redirect('/admin?success=review_updated');
+  } catch (error) {
+    console.error('Review toggle error:', error);
+    res.redirect('/admin?error=review_toggle');
+  }
+});
+
+// Handle review toggle pinned status
+router.post('/reviews/:id/toggle-pinned', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const review = await prisma.review.findUnique({ where: { id } });
+    
+    if (!review) {
+      return res.redirect('/admin?error=review_not_found');
+    }
+
+    await prisma.review.update({
+      where: { id },
+      data: { isPinned: !review.isPinned }
+    });
+
+    res.redirect('/admin?success=review_updated');
+  } catch (error) {
+    console.error('Review toggle pinned error:', error);
+    res.redirect('/admin?error=review_toggle');
+  }
+});
+
+// Handle review image upload
+router.post('/reviews/:id/upload-image', requireAdmin, upload.single('image'), async (req, res) => {
+  try {
+    console.log('🖼️ Review image upload request received');
+    const { id } = req.params;
+    console.log('🖼️ Review ID:', id);
+    
+    const review = await prisma.review.findUnique({ where: { id } });
+    
+    if (!review) {
+      console.log('🖼️ Review not found:', id);
+      return res.redirect('/admin/reviews?error=review_not_found');
+    }
+
+    console.log('🖼️ Review found:', review.name);
+    console.log('🖼️ Request file:', req.file ? 'present' : 'missing');
+    
+    if (!req.file) {
+      console.log('🖼️ No file uploaded');
+      return res.redirect('/admin/reviews?error=no_image');
+    }
+
+    console.log('🖼️ File details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+
+    console.log('🖼️ Uploading to Cloudinary...');
+    const result = await new Promise<any>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: 'plazma-bot/reviews',
+          transformation: [{ width: 800, height: 800, crop: 'fill', quality: 'auto' }],
+        },
+        (error, result) => {
+          if (error) {
+            console.error('🖼️ Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('🖼️ Cloudinary upload success:', result?.secure_url);
+            resolve(result);
+          }
+        },
+      ).end(req.file!.buffer);
+    });
+
+    const imageUrl = result.secure_url;
+    console.log('🖼️ Final image URL:', imageUrl);
+
+    const updatedReview = await prisma.review.update({
+      where: { id },
+      data: { photoUrl: imageUrl }
+    });
+
+    console.log('🖼️ Database updated, review photoUrl:', updatedReview.photoUrl);
+    res.redirect('/admin/reviews?success=image_updated');
+  } catch (error) {
+    console.error('🖼️ Review image upload error:', error);
+    res.redirect('/admin/reviews?error=image_upload');
+  }
+});
+
+// Handle review deletion
+router.post('/reviews/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.review.delete({ where: { id } });
+    res.redirect('/admin?success=review_deleted');
+  } catch (error) {
+    console.error('Review deletion error:', error);
+    res.redirect('/admin?error=review_delete');
+  }
+});
+
+// Handle partner inviter change
+router.post('/partners/:id/change-inviter', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newInviterCode } = req.body;
+    
+    // Find the new inviter by referral code
+    const newInviter = await prisma.partnerProfile.findUnique({
+      where: { referralCode: newInviterCode },
+      include: { user: true }
+    });
+    
+    if (!newInviter) {
+      return res.redirect('/admin/partners?error=inviter_not_found');
+    }
+    
+    // Find current partner
+    const currentPartner = await prisma.partnerProfile.findUnique({
+      where: { id },
+      include: { user: true }
+    });
+    
+    if (!currentPartner) {
+      return res.redirect('/admin/partners?error=partner_not_found');
+    }
+    
+    // Delete old referral if exists
+    await prisma.partnerReferral.deleteMany({
+      where: { referredId: currentPartner.userId }
+    });
+    
+    // Create new referral
+    await prisma.partnerReferral.create({
+      data: {
+        profileId: newInviter.id,
+        referredId: currentPartner.userId,
+        level: 1
+      }
+    });
+    
+    res.redirect('/admin/partners?success=inviter_changed');
+  } catch (error) {
+    console.error('Change inviter error:', error);
+    res.redirect('/admin/partners?error=inviter_change');
+  }
+});
+
+// Handle partner balance addition
+router.post('/partners/:id/add-balance', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+    
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { id },
+      include: { user: true }
+    });
+    
+    if (!partner) {
+      return res.redirect('/admin/partners?error=partner_not_found');
+    }
+    
+    const newBalance = partner.balance + parseFloat(amount);
+    
+    await prisma.partnerProfile.update({
+      where: { id },
+      data: { balance: newBalance }
+    });
+    
+    // Record transaction
+    await prisma.partnerTransaction.create({
+      data: {
+        profileId: id,
+        amount: parseFloat(amount),
+        type: 'CREDIT',
+        description: `Админ начислил ${amount} PZ`
+      }
+    });
+    
+    res.redirect('/admin/partners?success=balance_added');
+  } catch (error) {
+    console.error('Add balance error:', error);
+    res.redirect('/admin/partners?error=balance_add');
+  }
+});
+
+// Handle partner balance subtraction
+router.post('/partners/:id/subtract-balance', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+    
+    const partner = await prisma.partnerProfile.findUnique({
+      where: { id },
+      include: { user: true }
+    });
+    
+    if (!partner) {
+      return res.redirect('/admin/partners?error=partner_not_found');
+    }
+    
+    const newBalance = Math.max(0, partner.balance - parseFloat(amount));
+    
+    await prisma.partnerProfile.update({
+      where: { id },
+      data: { balance: newBalance }
+    });
+    
+    // Record transaction
+    await prisma.partnerTransaction.create({
+      data: {
+        profileId: id,
+        amount: parseFloat(amount),
+        type: 'DEBIT',
+        description: `Админ списал ${amount} PZ`
+      }
+    });
+    
+    res.redirect('/admin/partners?success=balance_subtracted');
+  } catch (error) {
+    console.error('Subtract balance error:', error);
+    res.redirect('/admin/partners?error=balance_subtract');
+  }
+});
+
+// Handle user inviter change
+router.post('/users/:id/change-inviter', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newInviterCode } = req.body;
+    
+    // Find the new inviter by referral code
+    const newInviter = await prisma.partnerProfile.findUnique({
+      where: { referralCode: newInviterCode },
+      include: { user: true }
+    });
+    
+    if (!newInviter) {
+      return res.redirect('/admin/users?error=inviter_not_found');
+    }
+    
+    // Find current user
+    const currentUser = await prisma.user.findUnique({
+      where: { id }
+    });
+    
+    if (!currentUser) {
+      return res.redirect('/admin/users?error=user_not_found');
+    }
+    
+    // Delete old referral if exists
+    await prisma.partnerReferral.deleteMany({
+      where: { referredId: id }
+    });
+    
+    // Create new referral
+    await prisma.partnerReferral.create({
+      data: {
+        profileId: newInviter.id,
+        referredId: id,
+        level: 1
+      }
+    });
+    
+    res.redirect('/admin/users?success=inviter_changed');
+  } catch (error) {
+    console.error('Change user inviter error:', error);
+    res.redirect('/admin/users?error=inviter_change');
+  }
+});
+
+// Handle user deletion
+router.post('/users/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Delete related data first
+    await prisma.cartItem.deleteMany({ where: { userId: id } });
+    await prisma.orderRequest.deleteMany({ where: { userId: id } });
+    await prisma.userHistory.deleteMany({ where: { userId: id } });
+    
+    // Delete partner profile and referrals if exists
+    const partnerProfile = await prisma.partnerProfile.findUnique({ where: { userId: id } });
+    if (partnerProfile) {
+      await prisma.partnerReferral.deleteMany({ where: { profileId: partnerProfile.id } });
+      await prisma.partnerReferral.deleteMany({ where: { referredId: id } });
+      await prisma.partnerProfile.delete({ where: { userId: id } });
+    }
+    
+    // Delete user
+    await prisma.user.delete({ where: { id } });
+    
+    res.redirect('/admin/users?success=user_deleted');
+  } catch (error) {
+    console.error('User deletion error:', error);
+    res.redirect('/admin/users?error=user_delete');
+  }
+});
+
+// Handle order status update
+router.post('/orders/:id/update-status', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    // Get order details to check if we need to deduct balance
+    const order = await prisma.orderRequest.findUnique({
+      where: { id },
+      include: {
+        user: {
+          include: {
+            partner: true
+          }
+        }
+      }
+    });
+
+    if (!order) {
+      return res.redirect('/admin?error=order_not_found');
+    }
+
+    // Update order status
+    await prisma.orderRequest.update({
+      where: { id },
+      data: { status }
+    });
+
+    // If status is "Completed" (отгружен), deduct balance from partner
+    if (status === 'Completed' && order.user && order.user.partner) {
+      // Calculate total amount from itemsJson
+      let totalAmount = 0;
+      try {
+        if (order.itemsJson && typeof order.itemsJson === 'string') {
+          const items = JSON.parse(order.itemsJson);
+          totalAmount = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+        } else if (typeof order.itemsJson === 'object' && Array.isArray(order.itemsJson)) {
+          totalAmount = order.itemsJson.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+        }
+      } catch (error) {
+        console.error('Error parsing order items:', error);
+        totalAmount = 0;
+      }
+      
+      // Check if partner has enough balance
+      if (order.user.partner.balance >= totalAmount) {
+        // Deduct balance
+        await prisma.partnerProfile.update({
+          where: { id: order.user.partner.id },
+          data: {
+            balance: {
+              decrement: totalAmount
+            }
+          }
+        });
+
+        // Record transaction
+        await prisma.partnerTransaction.create({
+          data: {
+            profileId: order.user.partner.id,
+            amount: -totalAmount, // Negative amount for deduction
+            type: 'DEBIT',
+            description: `Списание за заказ #${order.id}`
+          }
+        });
+
+        console.log(`Balance deducted: ${totalAmount} PZ from partner ${order.user.partner.id} for order ${id}`);
+      } else {
+        console.log(`Insufficient balance for order ${id}. Required: ${totalAmount}, Available: ${order.user.partner.balance}`);
+        // You might want to handle this case differently - maybe send an alert to admin
+      }
+    }
+
+    res.redirect('/admin/orders?success=order_updated');
+  } catch (error) {
+    console.error('Order status update error:', error);
+    res.redirect('/admin/orders?error=order_update');
+  }
+});
+
+// Handle user balance top-up
+router.post('/users/:id/add-balance', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount } = req.body;
+    
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      return res.redirect('/admin/orders?error=invalid_amount');
+    }
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        balance: {
+          increment: amountNum
+        }
+      } as any
+    });
+
+    res.redirect('/admin/orders?success=balance_added');
+  } catch (error) {
+    console.error('User balance top-up error:', error);
+    res.redirect('/admin/orders?error=balance_add');
+  }
+});
+
+// Handle order payment
+router.post('/orders/:id/pay', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get order details
+    const order = await prisma.orderRequest.findUnique({
+      where: { id },
+      include: {
+        user: {
+          include: {
+            partner: true
+          }
+        }
+      }
+    });
+
+    if (!order || !order.user) {
+      return res.redirect('/admin/orders?error=order_not_found');
+    }
+
+    // Calculate order total from itemsJson
+    let orderTotal = 0;
+    try {
+      if (order.itemsJson && typeof order.itemsJson === 'string') {
+        const items = JSON.parse(order.itemsJson);
+        orderTotal = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+      } else if (typeof order.itemsJson === 'object' && Array.isArray(order.itemsJson)) {
+        orderTotal = order.itemsJson.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+      }
+    } catch (error) {
+      console.error('Error parsing order items:', error);
+      orderTotal = 0;
+    }
+
+    // Check if user has enough balance
+    const userBalance = (order.user as any).balance || 0;
+    if (userBalance < orderTotal) {
+      return res.redirect('/admin/orders?error=insufficient_balance');
+    }
+
+    // Deduct from user balance
+    await prisma.user.update({
+      where: { id: order.user.id },
+      data: {
+        balance: {
+          decrement: orderTotal
+        }
+      } as any
+    });
+
+    // Update order status
+    await prisma.orderRequest.update({
+      where: { id },
+      data: { status: 'COMPLETED' }
+    });
+
+    // Calculate and distribute partner rewards
+    if (order.user.partner) {
+      const partner = order.user.partner;
+      let rewardAmount = 0;
+      let rewardDescription = '';
+
+      if (partner.programType === 'DIRECT') {
+        // Direct program: 25% commission
+        rewardAmount = orderTotal * 0.25;
+        rewardDescription = `Комиссия 25% за заказ #${order.id}`;
+      } else if (partner.programType === 'MULTI_LEVEL') {
+        // Multi-level program: 15% for direct referral
+        rewardAmount = orderTotal * 0.15;
+        rewardDescription = `Комиссия 15% за заказ #${order.id}`;
+      }
+
+      if (rewardAmount > 0) {
+        // Add to partner balance
+        await prisma.partnerProfile.update({
+          where: { id: partner.id },
+          data: {
+            balance: {
+              increment: rewardAmount
+            }
+          }
+        });
+
+        // Record transaction
+        await prisma.partnerTransaction.create({
+          data: {
+            profileId: partner.id,
+            amount: rewardAmount,
+            type: 'CREDIT',
+            description: rewardDescription
+          }
+        });
+
+        console.log(`Partner reward: ${rewardAmount} PZ to partner ${partner.id} for order ${id}`);
+      }
+
+      // Handle multi-level rewards (if applicable)
+      if (partner.programType === 'MULTI_LEVEL') {
+        // Find the inviter of this partner
+        const inviterReferral = await prisma.partnerReferral.findFirst({
+          where: { referredId: order.user.id },
+          include: {
+            profile: true
+          }
+        });
+
+        if (inviterReferral) {
+          // Level 2: 5% commission
+          const level2Reward = orderTotal * 0.05;
+          await prisma.partnerProfile.update({
+            where: { id: inviterReferral.profile.id },
+            data: {
+              balance: {
+                increment: level2Reward
+              }
+            }
+          });
+
+          await prisma.partnerTransaction.create({
+            data: {
+              profileId: inviterReferral.profile.id,
+              amount: level2Reward,
+              type: 'CREDIT',
+              description: `Комиссия 5% (2-й уровень) за заказ #${order.id}`
+            }
+          });
+
+          // Find the inviter of the inviter (Level 3)
+          const level3Referral = await prisma.partnerReferral.findFirst({
+            where: { referredId: inviterReferral.profile.userId },
+            include: {
+              profile: true
+            }
+          });
+
+          if (level3Referral) {
+            // Level 3: 5% commission
+            const level3Reward = orderTotal * 0.05;
+            await prisma.partnerProfile.update({
+              where: { id: level3Referral.profile.id },
+              data: {
+                balance: {
+                  increment: level3Reward
+                }
+              }
+            });
+
+            await prisma.partnerTransaction.create({
+              data: {
+                profileId: level3Referral.profile.id,
+                amount: level3Reward,
+                type: 'CREDIT',
+                description: `Комиссия 5% (3-й уровень) за заказ #${order.id}`
+              }
+            });
+          }
+        }
+      }
+    }
+
+    res.redirect('/admin/orders?success=order_paid');
+  } catch (error) {
+    console.error('Order payment error:', error);
+    res.redirect('/admin/orders?error=payment_failed');
+  }
+});
+
+// Handle order deletion
+router.post('/orders/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.orderRequest.delete({ where: { id } });
+    res.redirect('/admin?success=order_deleted');
+  } catch (error) {
+    console.error('Order deletion error:', error);
+    res.redirect('/admin?error=order_delete');
+  }
+});
+
+// Handle product creation
+router.post('/products', requireAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const { title, summary, description, price_rub, categoryId, availableInRussia, availableInBali } = req.body;
+
+    const trimmedTitle = typeof title === 'string' ? title.trim() : '';
+    const trimmedSummary = typeof summary === 'string' ? summary.trim() : '';
+    const trimmedCategoryId = typeof categoryId === 'string' ? categoryId.trim() : '';
+
+    if (!trimmedTitle || !trimmedSummary || !trimmedCategoryId) {
+      console.warn('Product creation validation failed:', { trimmedTitle, trimmedSummary, trimmedCategoryId });
+      return res.redirect('/admin?error=product_validation');
+    }
+
+    console.log('Product creation request body:', {
+      ...req.body,
+      title: trimmedTitle,
+      summary: trimmedSummary,
+      categoryId: trimmedCategoryId,
+    });
+    console.log('Category ID:', trimmedCategoryId);
+    console.log('Price RUB:', price_rub);
+
+    // Convert RUB to PZ (1 PZ = 100 RUB)
+    const rubPriceRaw = typeof price_rub === 'string' ? price_rub.replace(',', '.').trim() : '';
+    const rubPrice = Number.parseFloat(rubPriceRaw) || 0;
+    const pzPrice = Number.isFinite(rubPrice) ? rubPrice / 100 : 0;
+    
+    console.log('Creating product with RUB price:', rubPrice, 'PZ price:', pzPrice);
+    let imageUrl = null;
+
+    // Upload image to Cloudinary if provided
+    if (req.file) {
+      console.log('Uploading image to Cloudinary...');
+      try {
+        const result = await new Promise<any>((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            {
+              folder: 'plazma-bot/products',
+              transformation: [{ width: 800, height: 800, crop: 'fill', quality: 'auto' }],
+            },
+            (error, result) => {
+              if (error) {
+                reject(error);
+              } else {
+                resolve(result);
+              }
+            },
+          ).end(req.file!.buffer);
+        });
+
+        imageUrl = result.secure_url;
+        console.log('Image uploaded:', imageUrl);
+      } catch (uploadError) {
+        // Continue without blocking product creation if Cloudinary is unavailable
+        console.error('Cloudinary upload error, continuing without image:', uploadError);
+      }
+    }
+
+    const product = await prisma.product.create({
+      data: {
+        title: trimmedTitle,
+        summary: trimmedSummary,
+        description,
+        price: Number.isFinite(pzPrice) ? Number(pzPrice.toFixed(2)) : 0, // Use converted PZ price
+        categoryId: trimmedCategoryId,
+        imageUrl,
+        isActive: true,
+        availableInRussia: availableInRussia === 'on',
+        availableInBali: availableInBali === 'on'
+      } as any
+    });
+
+    console.log('Product created:', product.id);
+    res.redirect('/admin?success=product');
+  } catch (error) {
+    console.error('Product creation error:', error);
+    res.redirect('/admin?error=product');
+  }
+});
+
+// Handle review creation
+router.post('/reviews', requireAdmin, async (req, res) => {
+  try {
+    const { name, content, link, isPinned } = req.body;
+    await prisma.review.create({
+      data: {
+        name,
+        content,
+        link,
+        isPinned: isPinned === 'on',
+        isActive: true
+      }
+    });
+    res.redirect('/admin?success=review');
+  } catch (error) {
+    console.error('Review creation error:', error);
+    res.redirect('/admin?error=review');
+  }
+});
+
+// Test route to verify admin routing works
+router.get('/test', (req, res) => {
+  res.json({ status: 'Admin routes working', timestamp: new Date().toISOString() });
+});
+
+// Balance management route
+router.get('/balance', requireAdmin, async (req, res) => {
+  try {
+    const partners = await prisma.partnerProfile.findMany({
+      include: {
+        user: {
+          select: { firstName: true, lastName: true, username: true, telegramId: true }
+        }
+      },
+      orderBy: { balance: 'desc' }
+    });
+
+    const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление балансами</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+          h2 { color: #333; margin-bottom: 20px; }
+          .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          .btn-success { background: #28a745; }
+          .btn-danger { background: #dc3545; }
+          .btn-warning { background: #ffc107; color: #212529; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+          .balance-positive { color: #28a745; font-weight: bold; }
+          .balance-zero { color: #6c757d; }
+          .balance-negative { color: #dc3545; font-weight: bold; }
+          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
+          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+          .form-group { margin-bottom: 15px; }
+          .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+          .form-group input { width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+          .form-inline { display: inline-block; margin-right: 10px; }
+          .total-balance { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+          .total-balance h3 { margin: 0; color: #1976d2; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>💰 Управление балансами v2.0</h2>
+          <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
+          <a href="/admin" class="btn">← Назад</a>
+          
+          <div class="total-balance">
+            <h3>💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
+          </div>
+          
+          ${req.query.success === 'balance_added' ? '<div class="alert alert-success">✅ Баланс успешно пополнен</div>' : ''}
+          ${req.query.success === 'balance_subtracted' ? '<div class="alert alert-success">✅ Баланс успешно списан</div>' : ''}
+          ${req.query.error === 'balance_operation' ? '<div class="alert alert-error">❌ Ошибка при операции с балансом</div>' : ''}
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Партнёр</th>
+                <th>Telegram ID</th>
+                <th>Баланс</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${partners.map(partner => `
+                <tr>
+                  <td>
+                    ${partner.user.firstName || ''} ${partner.user.lastName || ''}
+                    ${partner.user.username ? `(@${partner.user.username})` : ''}
+                  </td>
+                  <td>${partner.user.telegramId}</td>
+                  <td class="${partner.balance > 0 ? 'balance-positive' : partner.balance === 0 ? 'balance-zero' : 'balance-negative'}">
+                    ${partner.balance.toFixed(2)} PZ
+                  </td>
+                  <td>
+                    <form method="post" action="/admin/partners/${partner.id}/add-balance" style="display: inline;">
+                      <div class="form-inline">
+                        <input type="number" name="amount" placeholder="Сумма" step="0.01" min="0.01" required style="width: 80px;">
+                        <button type="submit" class="btn btn-success">💰+</button>
+                      </div>
+                    </form>
+                    <form method="post" action="/admin/partners/${partner.id}/subtract-balance" style="display: inline;">
+                      <div class="form-inline">
+                        <input type="number" name="amount" placeholder="Сумма" step="0.01" min="0.01" required style="width: 80px;">
+                        <button type="submit" class="btn btn-danger">💰-</button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Balance management error:', error);
+    res.status(500).send('Ошибка загрузки страницы управления балансами');
+  }
+});
+
+// Transactions history route
+router.get('/transactions', requireAdmin, async (req, res) => {
+  try {
+    const transactions = await prisma.partnerTransaction.findMany({
+      include: {
+        profile: {
+          include: {
+            user: {
+              select: { firstName: true, lastName: true, username: true, telegramId: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100 // Limit to last 100 transactions
+    });
+
+    const totalTransactions = transactions.length;
+    const totalAmount = transactions.reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>История транзакций</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+          h2 { color: #333; margin-bottom: 20px; }
+          .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; position: sticky; top: 0; }
+          .amount-positive { color: #28a745; font-weight: bold; }
+          .amount-negative { color: #dc3545; font-weight: bold; }
+          .transaction-type { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+          .type-bonus { background: #d4edda; color: #155724; }
+          .type-referral { background: #cce5ff; color: #004085; }
+          .type-purchase { background: #fff3cd; color: #856404; }
+          .type-manual { background: #f8d7da; color: #721c24; }
+          .stats-row { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; text-align: center; }
+          .stat-item h4 { margin: 0; color: #1976d2; }
+          .stat-item p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>📊 История транзакций v2.0</h2>
+          <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
+          <a href="/admin" class="btn">← Назад</a>
+          <a href="/admin/balance" class="btn">💰 Балансы</a>
+          
+          <div class="stats-row">
+            <div class="stat-item">
+              <h4>Всего транзакций</h4>
+              <p>${totalTransactions}</p>
+            </div>
+            <div class="stat-item">
+              <h4>Общая сумма</h4>
+              <p>${totalAmount.toFixed(2)} PZ</p>
+            </div>
+            <div class="stat-item">
+              <h4>Период</h4>
+              <p>Последние 100</p>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Партнёр</th>
+                <th>Тип</th>
+                <th>Описание</th>
+                <th>Сумма</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${transactions.map(tx => `
+                <tr>
+                  <td>${new Date(tx.createdAt).toLocaleString('ru-RU')}</td>
+                  <td>
+                    ${tx.profile.user.firstName || ''} ${tx.profile.user.lastName || ''}
+                    ${tx.profile.user.username ? `(@${tx.profile.user.username})` : ''}
+                    <br><small style="color: #666;">ID: ${tx.profile.user.telegramId}</small>
+                  </td>
+                  <td>
+                    <span class="transaction-type ${
+                      tx.type === 'CREDIT' ? 'type-bonus' :
+                      tx.type === 'DEBIT' ? 'type-purchase' :
+                      'type-manual'
+                    }">${tx.type}</span>
+                  </td>
+                  <td>${tx.description || 'Нет описания'}</td>
+                  <td class="${tx.amount > 0 ? 'amount-positive' : 'amount-negative'}">
+                    ${tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)} PZ
+                  </td>
+                  <td><small style="color: #666;">${tx.id}</small></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Transactions history error:', error);
+    res.status(500).send('Ошибка загрузки истории транзакций');
+  }
+});
+
+// Partner network management
+router.get('/partners-network', requireAdmin, async (req, res) => {
+  try {
+    // Get all users with partner profiles
+    const usersWithPartners = await prisma.user.findMany({
+      include: {
+        partner: {
+          include: {
+            referrals: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Build network tree
+    const buildNetworkTree = (userId: string, level: number = 0): string => {
+      const user = usersWithPartners.find(u => u.id === userId);
+      if (!user || !user.partner) return '';
+
+      let html = '';
+      const indent = '  '.repeat(level);
+      
+      html += `${indent}👤 ${user.firstName || 'Пользователь'} (@${user.username || user.telegramId})\n`;
+      
+      if (user.partner.referrals.length > 0) {
+        html += `${indent}└── Партнёры:\n`;
+        user.partner.referrals.forEach((referral: any) => {
+          html += buildNetworkTree(referral.referredId, level + 1);
+        });
+      }
+      
+      return html;
+    };
+
+    let networkHtml = '';
+    usersWithPartners.forEach(user => {
+      if (user.partner) {
+        networkHtml += buildNetworkTree(user.id) + '\n';
+      }
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Сетка партнёров</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Courier New', monospace; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          .network { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; white-space: pre-line; }
+        </style>
+      </head>
+      <body>
+        <h2>🌐 Сетка партнёров v2.0</h2>
+        <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
+        <a href="/admin" class="btn">← Назад</a>
+        <a href="/admin/partners" class="btn">📊 Партнёры</a>
+        
+        <div class="network">
+          <h3>Дерево партнёрской сети:</h3>
+          ${networkHtml || 'Партнёрская сеть пуста'}
+        </div>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Partners network error:', error);
+    res.status(500).send('Ошибка загрузки сетки партнёров');
+  }
+});
+
+// Individual admin pages
+router.get('/users', requireAdmin, async (req, res) => {
+  try {
+    console.log('👥 Admin users page accessed');
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50 // Limit to last 50 users
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление пользователями</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>👥 Управление пользователями v2.0</h2>
+        <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
+        <a href="/admin" class="btn">← Назад</a>
+        
+        ${req.query.success === 'user_deleted' ? '<div class="alert alert-success">✅ Пользователь успешно удален</div>' : ''}
+        ${req.query.error === 'user_delete' ? '<div class="alert alert-error">❌ Ошибка при удалении пользователя</div>' : ''}
+        ${req.query.success === 'inviter_changed' ? '<div class="alert alert-success">✅ Пригласитель успешно изменен</div>' : ''}
+        ${req.query.error === 'inviter_not_found' ? '<div class="alert alert-error">❌ Пригласитель с таким кодом не найден</div>' : ''}
+        ${req.query.error === 'inviter_change' ? '<div class="alert alert-error">❌ Ошибка при смене пригласителя</div>' : ''}
+        
+        <style>
+          .delete-btn { background: #f87171; color: #7f1d1d; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+          .delete-btn:hover { background: #ef4444; }
+          .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 5px; }
+          .change-inviter-btn:hover { background: #059669; }
+          .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
+          .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        </style>
+        <table>
+          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Чей реферал</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
+    `;
+
+    // Get referral information for all users
+    const referrals = await prisma.partnerReferral.findMany({
+      include: {
+        profile: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+
+    // Get all available partners for dropdown
+    const availablePartners = await prisma.partnerProfile.findMany({
+      include: {
+        user: true
+      },
+      orderBy: {
+        user: {
+          firstName: 'asc'
+        }
+      }
+    });
+
+    users.forEach(user => {
+      // Find who invited this user
+      const referral = referrals.find(r => r.referredId === user.id);
+      const inviterInfo = referral ? `${referral.profile.user.firstName || 'Не указано'} (@${referral.profile.user.username || referral.profile.user.telegramId})` : 'Нет пригласителя';
+      
+      html += `
+        <tr>
+          <td>${user.id.slice(0, 8)}...</td>
+          <td>${user.telegramId}</td>
+          <td>${user.firstName || 'Не указано'}</td>
+          <td>${user.username ? '@' + user.username : 'Не указано'}</td>
+          <td>
+            ${inviterInfo}
+            <div style="margin-top: 5px;">
+              <form method="post" action="/admin/users/${user.id}/change-inviter" style="display: inline;">
+                <select name="newInviterCode" style="width: 140px; padding: 4px; font-size: 11px;" required>
+                  <option value="">Выберите пригласителя</option>
+                  ${availablePartners.map(partner => `
+                    <option value="${partner.referralCode}">${partner.user.firstName || 'Пользователь'} (${partner.referralCode})</option>
+                  `).join('')}
+                </select>
+                <button type="submit" class="change-inviter-btn" onclick="return confirm('Изменить пригласителя для ${user.firstName || user.telegramId}?')" style="padding: 4px 8px; font-size: 11px;">🔄</button>
+              </form>
+            </div>
+          </td>
+          <td>${new Date(user.createdAt).toLocaleDateString()}</td>
+          <td>${user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Нет данных'}</td>
+          <td>
+            <form method="post" action="/admin/users/${user.id}/delete" onsubmit="return confirm('Удалить пользователя «${user.firstName || user.telegramId}»?')" style="display: inline;">
+              <button type="submit" class="delete-btn">🗑️ Удалить</button>
+            </form>
+          </td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Users page error:', error);
+    res.status(500).send('Ошибка загрузки пользователей');
+  }
+});
+
 router.get('/categories', requireAdmin, async (req, res) => {
   try {
     console.log('📁 Admin categories page accessed');

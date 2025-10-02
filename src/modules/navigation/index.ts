@@ -398,18 +398,23 @@ export const navigationModule: BotModule = {
             programType
           });
           console.log('🔗 Referral: User action logged');
+          
+          // Send main keyboard after referral message
+          await ctx.reply('Выберите действие:', mainKeyboard());
+          await sendWelcomeVideo(ctx);
         } else {
           console.log('🔗 Referral: Partner profile not found for code:', referralCode);
           await ctx.reply('❌ Реферальная ссылка недействительна. Партнёр не найден.');
+          await renderHome(ctx);
         }
       } catch (error) {
         console.error('🔗 Referral: Error processing referral:', error);
         await ctx.reply('❌ Ошибка при обработке реферальной ссылки. Попробуйте позже.');
+        await renderHome(ctx);
       }
+    } else {
+      await renderHome(ctx);
     }
-
-    await renderHome(ctx);
-    });
 
 
     bot.hears(['Меню', 'Главное меню', 'Назад'], async (ctx) => {
@@ -451,6 +456,5 @@ export const navigationModule: BotModule = {
       await ctx.reply(introDetails);
     });
 
-
-  },
+  }
 };
