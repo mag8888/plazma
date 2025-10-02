@@ -193,6 +193,12 @@ export async function recordPartnerTransaction(profileId: string, amount: number
   });
 
   // Recalculate total bonus from all transactions
+  await recalculatePartnerBonuses(profileId);
+
+  return transaction;
+}
+
+export async function recalculatePartnerBonuses(profileId: string) {
   const allTransactions = await prisma.partnerTransaction.findMany({
     where: { profileId }
   });
@@ -209,7 +215,8 @@ export async function recordPartnerTransaction(profileId: string, amount: number
     }
   });
 
-  return transaction;
+  console.log(`🔄 Recalculated bonuses for profile ${profileId}: ${totalBonus} PZ`);
+  return totalBonus;
 }
 
 export async function createPartnerReferral(profileId: string, level: number, referredId?: string, contact?: string) {

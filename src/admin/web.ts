@@ -3,6 +3,7 @@ import multer from 'multer';
 import session from 'express-session';
 import { v2 as cloudinary } from 'cloudinary';
 import { prisma } from '../lib/prisma.js';
+import { recalculatePartnerBonuses } from '../services/partner-service.js';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -1781,6 +1782,9 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <form method="post" action="/admin/cleanup-referral-duplicates" style="display: inline;">
           <button type="submit" class="btn" style="background: #dc3545;" onclick="return confirm('⚠️ Очистить дублирующиеся записи рефералов? Это действие необратимо!')">🧹 Очистить дубли рефералов</button>
         </form>
+        <form method="post" action="/admin/force-recalculate-bonuses" style="display: inline;">
+          <button type="submit" class="btn" style="background: #17a2b8;" onclick="return confirm('🔄 Принудительно пересчитать ВСЕ бонусы?')">🔄 Пересчитать бонусы</button>
+        </form>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -1795,10 +1799,12 @@ router.get('/partners', requireAdmin, async (req, res) => {
         ${req.query.success === 'duplicates_cleaned' ? `<div class="alert alert-success">✅ Дубли очищены! Удалено ${req.query.referrals || 0} дублей рефералов и ${req.query.transactions || 0} дублей транзакций</div>` : ''}
         ${req.query.success === 'all_balances_recalculated' ? '<div class="alert alert-success">✅ Все балансы партнёров пересчитаны</div>' : ''}
         ${req.query.success === 'referral_duplicates_cleaned' ? `<div class="alert alert-success">✅ Дубли рефералов очищены! Удалено ${req.query.count || 0} дублей</div>` : ''}
+        ${req.query.success === 'bonuses_force_recalculated' ? '<div class="alert alert-success">✅ Все бонусы принудительно пересчитаны</div>' : ''}
         ${req.query.error === 'balance_add' ? '<div class="alert alert-error">❌ Ошибка при пополнении баланса</div>' : ''}
         ${req.query.error === 'balance_subtract' ? '<div class="alert alert-error">❌ Ошибка при списании баланса</div>' : ''}
         ${req.query.error === 'bonus_recalculation' ? '<div class="alert alert-error">❌ Ошибка при пересчёте бонусов</div>' : ''}
         ${req.query.error === 'balance_recalculation_failed' ? '<div class="alert alert-error">❌ Ошибка при пересчёте всех балансов</div>' : ''}
+        ${req.query.error === 'bonus_force_recalculation_failed' ? '<div class="alert alert-error">❌ Ошибка при принудительном пересчёте бонусов</div>' : ''}
         ${req.query.error === 'referral_cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей рефералов</div>' : ''}
         ${req.query.error === 'cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей</div>' : ''}
         <style>
@@ -2696,20 +2702,8 @@ router.post('/recalculate-all-balances', requireAdmin, async (req, res) => {
     for (const profile of profiles) {
       console.log(`📊 Processing profile ${profile.id}...`);
       
-      // Calculate total bonus from transactions
-      const transactions = await prisma.partnerTransaction.findMany({
-        where: { profileId: profile.id }
-      });
-      
-      const totalBonus = transactions.reduce((sum, tx) => {
-        return sum + (tx.type === 'CREDIT' ? tx.amount : -tx.amount);
-      }, 0);
-      
-      // Update profile bonus
-      await prisma.partnerProfile.update({
-        where: { id: profile.id },
-        data: { bonus: totalBonus }
-      });
+      // Use the centralized bonus recalculation function
+      const totalBonus = await recalculatePartnerBonuses(profile.id);
       
       console.log(`✅ Updated profile ${profile.id}: ${totalBonus} PZ bonus`);
     }
@@ -2873,6 +2867,31 @@ router.post('/cleanup-referral-duplicates', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Referral duplicates cleanup error:', error);
     res.redirect('/admin/partners?error=referral_cleanup_failed');
+  }
+});
+
+// Force recalculate all bonuses
+router.post('/force-recalculate-bonuses', requireAdmin, async (req, res) => {
+  try {
+    console.log('🔄 Starting forced bonus recalculation...');
+    
+    // Get all partner profiles
+    const profiles = await prisma.partnerProfile.findMany();
+    
+    for (const profile of profiles) {
+      console.log(`📊 Recalculating bonuses for profile ${profile.id}...`);
+      
+      // Use the centralized bonus recalculation function
+      const totalBonus = await recalculatePartnerBonuses(profile.id);
+      
+      console.log(`✅ Updated profile ${profile.id}: ${totalBonus} PZ bonus`);
+    }
+    
+    console.log('🎉 Forced bonus recalculation completed!');
+    res.redirect('/admin/partners?success=bonuses_force_recalculated');
+  } catch (error) {
+    console.error('❌ Forced bonus recalculation error:', error);
+    res.redirect('/admin/partners?error=bonus_force_recalculation_failed');
   }
 });
 
