@@ -97,6 +97,95 @@ router.get('/', requireAdmin, async (req, res) => {
       totalBalance: totalBalance,
     };
 
+    // Helper functions for lists
+    async function getRecentUsers() {
+      try {
+        const users = await prisma.user.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { firstName: true, lastName: true, username: true, createdAt: true }
+        });
+        
+        if (users.length === 0) {
+          return '<div class="empty-list">Нет пользователей</div>';
+        }
+        
+        return users.map(user => `
+          <div class="list-item">
+            <div class="list-info">
+              <div class="list-name">${user.firstName || 'Пользователь'} ${user.lastName || ''}</div>
+              <div class="list-time">${user.createdAt.toLocaleString('ru-RU')}</div>
+            </div>
+            <div>@${user.username || 'без username'}</div>
+          </div>
+        `).join('');
+      } catch (error) {
+        return '<div class="empty-list">Ошибка загрузки</div>';
+      }
+    }
+
+    async function getRecentOrders() {
+      try {
+        const orders = await prisma.orderRequest.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: {
+            user: { select: { firstName: true, lastName: true } }
+          }
+        });
+        
+        if (orders.length === 0) {
+          return '<div class="empty-list">Нет заказов</div>';
+        }
+        
+        return orders.map(order => `
+          <div class="list-item">
+            <div class="list-info">
+              <div class="list-name">Заказ #${order.id}</div>
+              <div class="list-time">${order.createdAt.toLocaleString('ru-RU')}</div>
+            </div>
+            <div>${order.user?.firstName || 'Пользователь'}</div>
+          </div>
+        `).join('');
+      } catch (error) {
+        return '<div class="empty-list">Ошибка загрузки</div>';
+      }
+    }
+
+    async function getRecentTransactions() {
+      try {
+        const transactions = await prisma.partnerTransaction.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: {
+            profile: {
+              include: {
+                user: { select: { firstName: true, lastName: true } }
+              }
+            }
+          }
+        });
+        
+        if (transactions.length === 0) {
+          return '<div class="empty-list">Нет транзакций</div>';
+        }
+        
+        return transactions.map(tx => `
+          <div class="list-item">
+            <div class="list-info">
+              <div class="list-name">${tx.profile.user.firstName || 'Партнёр'}</div>
+              <div class="list-time">${tx.createdAt.toLocaleString('ru-RU')}</div>
+            </div>
+            <div class="list-amount ${tx.amount < 0 ? 'negative' : ''}">
+              ${tx.amount > 0 ? '+' : ''}${tx.amount.toFixed(2)} PZ
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        return '<div class="empty-list">Ошибка загрузки</div>';
+      }
+    }
+
     res.send(`
       <!DOCTYPE html>
       <html>
@@ -124,6 +213,34 @@ router.get('/', requireAdmin, async (req, res) => {
           .section-header { display: flex; justify-content: space-between; align-items: center; margin: 20px 0; }
           .section-title { font-size: 24px; font-weight: 600; color: #333; }
           .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+          
+          /* Recent Lists Styles */
+          .recent-lists { margin: 30px 0; }
+          .list-section { margin-bottom: 25px; }
+          .list-section h3 { margin-bottom: 15px; color: #333; font-size: 18px; }
+          .list-container { 
+            background: #f8f9fa; 
+            border: 1px solid #e9ecef; 
+            border-radius: 8px; 
+            padding: 15px; 
+            max-height: 200px; 
+            overflow-y: auto; 
+          }
+          .list-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 8px 0; 
+            border-bottom: 1px solid #e9ecef; 
+          }
+          .list-item:last-child { border-bottom: none; }
+          .list-item:hover { background: #e9ecef; }
+          .list-info { flex: 1; }
+          .list-name { font-weight: 600; color: #333; }
+          .list-time { color: #6c757d; font-size: 0.9em; }
+          .list-amount { font-weight: bold; color: #28a745; }
+          .list-amount.negative { color: #dc3545; }
+          .empty-list { text-align: center; color: #6c757d; padding: 20px; }
         </style>
       </head>
       <body>
@@ -176,6 +293,30 @@ router.get('/', requireAdmin, async (req, res) => {
             
             <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
               <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${stats.totalBalance.toFixed(2)} PZ</h3>
+            </div>
+
+            <!-- Recent Data Lists -->
+            <div class="recent-lists">
+              <div class="list-section">
+                <h3>👥 Последние пользователи</h3>
+                <div class="list-container">
+                  ${await getRecentUsers()}
+                </div>
+              </div>
+              
+              <div class="list-section">
+                <h3>📦 Последние заказы</h3>
+                <div class="list-container">
+                  ${await getRecentOrders()}
+                </div>
+              </div>
+              
+              <div class="list-section">
+                <h3>💰 Последние транзакции</h3>
+                <div class="list-container">
+                  ${await getRecentTransactions()}
+                </div>
+              </div>
             </div>
           </div>
           
