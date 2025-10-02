@@ -11,6 +11,7 @@ import { prisma } from './lib/prisma.js';
 import { ensureInitialData } from './lib/bootstrap.js';
 import { setupAdminPanel } from './admin/index.js';
 import { adminWebRouter } from './admin/web.js';
+import { setBotInstance } from './lib/bot-instance.js';
 
 async function bootstrap() {
   try {
@@ -59,6 +60,9 @@ async function bootstrap() {
     // Register cart actions
     const { registerCartActions } = await import('./modules/cart/index.js');
     registerCartActions(bot);
+
+    // Set global bot instance for admin panel
+    setBotInstance(bot);
 
     console.log('Starting bot in long polling mode...');
     

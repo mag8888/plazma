@@ -856,7 +856,14 @@ router.get('/', requireAdmin, async (req, res) => {
             .then(response => response.json())
             .then(data => {
               if (data.success) {
-                alert(\`Сообщения отправлены \${data.sent} пользователям\`);
+                let message = data.message;
+                if (data.errors && data.errors.length > 0) {
+                  message += '\\n\\nОшибки:\\n' + data.errors.slice(0, 3).join('\\n');
+                  if (data.errors.length > 3) {
+                    message += '\\n... и еще ' + (data.errors.length - 3) + ' ошибок';
+                  }
+                }
+                alert(message);
                 closeMessageComposer();
               } else {
                 alert('Ошибка при отправке: ' + data.error);
@@ -1170,11 +1177,14 @@ router.post('/send-messages', requireAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Не указан текст сообщения' });
     }
     
-    // For now, just log the messages (bot integration will be added later)
+    // Get bot instance for real message sending
+    const { getBotInstance } = await import('../lib/bot-instance.js');
+    const bot = await getBotInstance();
+    
     let sentCount = 0;
     let errors = [];
     
-    // Validate users and prepare messages
+    // Send messages to each user
     for (const userId of userIds) {
       try {
         const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -1201,10 +1211,39 @@ router.post('/send-messages', requireAdmin, async (req, res) => {
         
         messageText = `${typeEmoji} ${messageText}`;
         
-        // Log the message for now (bot sending will be implemented later)
-        console.log(`📨 Message prepared for user ${user.firstName} (${user.id}):`, messageText);
+        // Send message via Telegram bot
+        try {
+          await bot.telegram.sendMessage(user.telegramId, messageText, {
+            parse_mode: 'Markdown'
+          });
+          
+          // Add buttons if requested
+          if (includeButtons && (button1.text || button2.text)) {
+            const buttons = [];
+            if (button1.text) {
+              buttons.push([{ text: button1.text, url: button1.url }]);
+            }
+            if (button2.text) {
+              buttons.push([{ text: button2.text, url: button2.url }]);
+            }
+            
+            if (buttons.length > 0) {
+              await bot.telegram.sendMessage(user.telegramId, '👇 Выберите действие:', {
+                reply_markup: { inline_keyboard: buttons }
+              });
+            }
+          }
+          
+          console.log(`✅ Message sent to user ${user.firstName} (${user.id})`);
+          
+        } catch (telegramError) {
+          console.error(`❌ Telegram error for user ${user.id}:`, telegramError);
+          const telegramErrorMessage = telegramError instanceof Error ? telegramError.message : String(telegramError);
+          errors.push(`Ошибка Telegram для ${user.firstName}: ${telegramErrorMessage}`);
+          continue;
+        }
         
-        // Log the message
+        // Log successful message
         await prisma.userHistory.create({
           data: {
             userId: user.id,
@@ -1215,7 +1254,8 @@ router.post('/send-messages', requireAdmin, async (req, res) => {
               messageLength: text.length,
               hasButtons: includeButtons,
               messageText: messageText,
-              status: 'prepared' // Will be 'sent' when bot integration is complete
+              status: 'sent',
+              telegramId: user.telegramId
             }
           }
         });
@@ -1223,9 +1263,9 @@ router.post('/send-messages', requireAdmin, async (req, res) => {
         sentCount++;
         
       } catch (error) {
-        console.error(`Error preparing message for user ${userId}:`, error);
+        console.error(`Error sending message to user ${userId}:`, error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        errors.push(`Ошибка подготовки сообщения пользователю ${userId}: ${errorMessage}`);
+        errors.push(`Ошибка отправки пользователю ${userId}: ${errorMessage}`);
       }
     }
     
@@ -1233,7 +1273,11 @@ router.post('/send-messages', requireAdmin, async (req, res) => {
       success: true,
       sent: sentCount,
       total: userIds.length,
-      errors: errors.length > 0 ? errors : undefined
+      failed: userIds.length - sentCount,
+      errors: errors.length > 0 ? errors : undefined,
+      message: sentCount > 0 ? 
+        `Успешно отправлено ${sentCount} из ${userIds.length} сообщений` : 
+        'Не удалось отправить ни одного сообщения'
     });
     
   } catch (error) {
