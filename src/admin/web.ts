@@ -1778,6 +1778,9 @@ router.get('/partners', requireAdmin, async (req, res) => {
           <button type="submit" class="btn" style="background: #ffc107; color: #000;" onclick="return confirm('🔄 Пересчитать ВСЕ балансы партнёров?')">🔄 Пересчитать все балансы</button>
         </form>
         <a href="/admin/debug-partners" class="btn" style="background: #6c757d;">🔍 Отладка партнёров</a>
+        <form method="post" action="/admin/cleanup-referral-duplicates" style="display: inline;">
+          <button type="submit" class="btn" style="background: #dc3545;" onclick="return confirm('⚠️ Очистить дублирующиеся записи рефералов? Это действие необратимо!')">🧹 Очистить дубли рефералов</button>
+        </form>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -1791,10 +1794,12 @@ router.get('/partners', requireAdmin, async (req, res) => {
         ${req.query.success === 'bonuses_recalculated' ? '<div class="alert alert-success">✅ Бонусы успешно пересчитаны</div>' : ''}
         ${req.query.success === 'duplicates_cleaned' ? `<div class="alert alert-success">✅ Дубли очищены! Удалено ${req.query.referrals || 0} дублей рефералов и ${req.query.transactions || 0} дублей транзакций</div>` : ''}
         ${req.query.success === 'all_balances_recalculated' ? '<div class="alert alert-success">✅ Все балансы партнёров пересчитаны</div>' : ''}
+        ${req.query.success === 'referral_duplicates_cleaned' ? `<div class="alert alert-success">✅ Дубли рефералов очищены! Удалено ${req.query.count || 0} дублей</div>` : ''}
         ${req.query.error === 'balance_add' ? '<div class="alert alert-error">❌ Ошибка при пополнении баланса</div>' : ''}
         ${req.query.error === 'balance_subtract' ? '<div class="alert alert-error">❌ Ошибка при списании баланса</div>' : ''}
         ${req.query.error === 'bonus_recalculation' ? '<div class="alert alert-error">❌ Ошибка при пересчёте бонусов</div>' : ''}
         ${req.query.error === 'balance_recalculation_failed' ? '<div class="alert alert-error">❌ Ошибка при пересчёте всех балансов</div>' : ''}
+        ${req.query.error === 'referral_cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей рефералов</div>' : ''}
         ${req.query.error === 'cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей</div>' : ''}
         <style>
           .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px; }
@@ -1908,7 +1913,9 @@ router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
         const partnerName = `${partner.user.firstName || ''} ${partner.user.lastName || ''}`.trim();
         const username = partner.user.username ? ` (@${partner.user.username})` : '';
         const balance = partner.balance.toFixed(2);
-        const referrals = partner.referrals.length;
+        // Count unique referrals (avoid duplicates)
+        const uniqueReferrals = new Set(partner.referrals.map((r: any) => r.referredId).filter(Boolean));
+        const referrals = uniqueReferrals.size;
         
         let node = `${indent}${levelEmoji} ${partnerName}${username} - ${balance} PZ (${referrals} рефералов)\n`;
         
@@ -2821,6 +2828,51 @@ router.get('/debug-partners', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Debug partners error:', error);
     res.send('❌ Ошибка отладки партнёров: ' + (error instanceof Error ? error.message : String(error)));
+  }
+});
+
+// Cleanup referral duplicates
+router.post('/cleanup-referral-duplicates', requireAdmin, async (req, res) => {
+  try {
+    console.log('🧹 Starting referral duplicates cleanup...');
+    
+    // Find all referrals
+    const allReferrals = await prisma.partnerReferral.findMany({
+      where: { referredId: { not: null } },
+      orderBy: { createdAt: 'asc' }
+    });
+    
+    // Group by profileId + referredId combination
+    const grouped = new Map<string, any[]>();
+    for (const ref of allReferrals) {
+      const key = `${ref.profileId}-${ref.referredId}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      grouped.get(key)!.push(ref);
+    }
+    
+    let deletedCount = 0;
+    
+    // Process duplicates
+    for (const [key, referrals] of grouped) {
+      if (referrals.length > 1) {
+        // Keep the first one, delete the rest
+        const toDelete = referrals.slice(1);
+        for (const ref of toDelete) {
+          await prisma.partnerReferral.delete({
+            where: { id: ref.id }
+          });
+          deletedCount++;
+        }
+      }
+    }
+    
+    console.log(`✅ Cleaned up ${deletedCount} duplicate referrals`);
+    res.redirect('/admin/partners?success=referral_duplicates_cleaned&count=' + deletedCount);
+  } catch (error) {
+    console.error('❌ Referral duplicates cleanup error:', error);
+    res.redirect('/admin/partners?error=referral_cleanup_failed');
   }
 });
 
