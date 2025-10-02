@@ -99,19 +99,6 @@ async function sendProductCards(ctx: Context, categoryId: string) {
       }
     }
 
-    // Add back to categories button
-    await ctx.reply('Выберите действие:', {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: '🔙 К категориям',
-              callback_data: 'shop:categories',
-            },
-          ],
-        ],
-      },
-    });
   } catch (error) {
     console.error('Error loading products:', error);
     await ctx.reply('❌ Ошибка загрузки товаров. Попробуйте позже.');
@@ -247,10 +234,5 @@ export const shopModule: BotModule = {
       await handleBuy(ctx, productId);
     });
 
-    // Handle back to categories button
-    bot.action('shop:categories', async (ctx) => {
-      await ctx.answerCbQuery();
-      await showCategories(ctx);
-    });
   },
 };
