@@ -1785,6 +1785,9 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <form method="post" action="/admin/force-recalculate-bonuses" style="display: inline;">
           <button type="submit" class="btn" style="background: #17a2b8;" onclick="return confirm('🔄 Принудительно пересчитать ВСЕ бонусы?')">🔄 Пересчитать бонусы</button>
         </form>
+        <form method="post" action="/admin/cleanup-duplicate-bonuses" style="display: inline;">
+          <button type="submit" class="btn" style="background: #dc3545;" onclick="return confirm('⚠️ Удалить дублирующиеся бонусы? Это действие необратимо!')">🧹 Очистить дубли бонусов</button>
+        </form>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -1800,11 +1803,13 @@ router.get('/partners', requireAdmin, async (req, res) => {
         ${req.query.success === 'all_balances_recalculated' ? '<div class="alert alert-success">✅ Все балансы партнёров пересчитаны</div>' : ''}
         ${req.query.success === 'referral_duplicates_cleaned' ? `<div class="alert alert-success">✅ Дубли рефералов очищены! Удалено ${req.query.count || 0} дублей</div>` : ''}
         ${req.query.success === 'bonuses_force_recalculated' ? '<div class="alert alert-success">✅ Все бонусы принудительно пересчитаны</div>' : ''}
+        ${req.query.success === 'duplicate_bonuses_cleaned' ? `<div class="alert alert-success">✅ Дубли бонусов очищены! Удалено ${req.query.count || 0} дублей</div>` : ''}
         ${req.query.error === 'balance_add' ? '<div class="alert alert-error">❌ Ошибка при пополнении баланса</div>' : ''}
         ${req.query.error === 'balance_subtract' ? '<div class="alert alert-error">❌ Ошибка при списании баланса</div>' : ''}
         ${req.query.error === 'bonus_recalculation' ? '<div class="alert alert-error">❌ Ошибка при пересчёте бонусов</div>' : ''}
         ${req.query.error === 'balance_recalculation_failed' ? '<div class="alert alert-error">❌ Ошибка при пересчёте всех балансов</div>' : ''}
         ${req.query.error === 'bonus_force_recalculation_failed' ? '<div class="alert alert-error">❌ Ошибка при принудительном пересчёте бонусов</div>' : ''}
+        ${req.query.error === 'duplicate_bonuses_cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей бонусов</div>' : ''}
         ${req.query.error === 'referral_cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей рефералов</div>' : ''}
         ${req.query.error === 'cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей</div>' : ''}
         <style>
@@ -2892,6 +2897,88 @@ router.post('/force-recalculate-bonuses', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Forced bonus recalculation error:', error);
     res.redirect('/admin/partners?error=bonus_force_recalculation_failed');
+  }
+});
+
+// Force recalculate specific partner bonuses
+router.post('/recalculate-partner-bonuses/:profileId', requireAdmin, async (req, res) => {
+  try {
+    const { profileId } = req.params;
+    console.log(`🔄 Force recalculating bonuses for profile ${profileId}...`);
+    
+    const totalBonus = await recalculatePartnerBonuses(profileId);
+    
+    console.log(`✅ Force recalculated bonuses for profile ${profileId}: ${totalBonus} PZ`);
+    res.redirect(`/admin/partners?success=partner_bonuses_recalculated&bonus=${totalBonus}`);
+  } catch (error) {
+    console.error('❌ Force recalculate partner bonuses error:', error);
+    res.redirect('/admin/partners?error=partner_bonus_recalculation_failed');
+  }
+});
+
+// Cleanup duplicate bonuses
+router.post('/cleanup-duplicate-bonuses', requireAdmin, async (req, res) => {
+  try {
+    console.log('🧹 Starting duplicate bonuses cleanup...');
+    
+    // Get all partner profiles
+    const profiles = await prisma.partnerProfile.findMany();
+    let totalDeleted = 0;
+    
+    for (const profile of profiles) {
+      console.log(`📊 Processing profile ${profile.id}...`);
+      
+      // Get all transactions for this profile
+      const transactions = await prisma.partnerTransaction.findMany({
+        where: { 
+          profileId: profile.id,
+          description: { contains: 'Бонус за приглашение друга' }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+      
+      // Group by user ID (extract from description)
+      const bonusGroups = new Map<string, any[]>();
+      
+      for (const tx of transactions) {
+        // Extract user ID from description like "Бонус за приглашение друга (user_id)"
+        const match = tx.description.match(/Бонус за приглашение друга \((.+?)\)/);
+        if (match) {
+          const userId = match[1];
+          if (!bonusGroups.has(userId)) {
+            bonusGroups.set(userId, []);
+          }
+          bonusGroups.get(userId)!.push(tx);
+        } else {
+          // Old format without user ID - group by amount and description
+          const key = `${tx.amount}-${tx.description}`;
+          if (!bonusGroups.has(key)) {
+            bonusGroups.set(key, []);
+          }
+          bonusGroups.get(key)!.push(tx);
+        }
+      }
+      
+      // Delete duplicates (keep only the first one)
+      for (const [key, group] of bonusGroups) {
+        if (group.length > 1) {
+          console.log(`  - Found ${group.length} duplicate bonuses for ${key}, keeping first one`);
+          const toDelete = group.slice(1);
+          for (const tx of toDelete) {
+            await prisma.partnerTransaction.delete({
+              where: { id: tx.id }
+            });
+            totalDeleted++;
+          }
+        }
+      }
+    }
+    
+    console.log(`✅ Cleaned up ${totalDeleted} duplicate bonus transactions`);
+    res.redirect(`/admin/partners?success=duplicate_bonuses_cleaned&count=${totalDeleted}`);
+  } catch (error) {
+    console.error('❌ Duplicate bonuses cleanup error:', error);
+    res.redirect('/admin/partners?error=duplicate_bonuses_cleanup_failed');
   }
 });
 

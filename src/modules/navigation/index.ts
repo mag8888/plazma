@@ -3,6 +3,7 @@ import { Context } from '../../bot/context.js';
 import { BotModule } from '../../bot/types.js';
 import { logUserAction, ensureUser } from '../../services/user-history.js';
 import { createPartnerReferral, recordPartnerTransaction } from '../../services/partner-service.js';
+import { prisma } from '../../lib/prisma.js';
 
 const greeting = `👋 Добро пожаловать!
 Plazma Water — жидкие витамины и минералы в наноформе.
@@ -345,15 +346,27 @@ export const navigationModule: BotModule = {
             const referralLevel = programType === 'DIRECT' ? 1 : 1; // Both start at level 1
             await createPartnerReferral(partnerProfile.id, referralLevel, user.id);
             
-            // Award 3PZ to the inviter
-            console.log('🔗 Referral: Awarding 3PZ bonus to inviter');
-            await recordPartnerTransaction(
-              partnerProfile.id, 
-              3, 
-              'Бонус за приглашение друга', 
-              'CREDIT'
-            );
-            console.log('🔗 Referral: Bonus awarded successfully');
+            // Check if bonus was already awarded for this user
+            const existingBonus = await prisma.partnerTransaction.findFirst({
+              where: {
+                profileId: partnerProfile.id,
+                description: `Бонус за приглашение друга (${user.id})`
+              }
+            });
+            
+            if (!existingBonus) {
+              // Award 3PZ to the inviter only if not already awarded
+              console.log('🔗 Referral: Awarding 3PZ bonus to inviter for new user');
+              await recordPartnerTransaction(
+                partnerProfile.id, 
+                3, 
+                `Бонус за приглашение друга (${user.id})`, 
+                'CREDIT'
+              );
+              console.log('🔗 Referral: Bonus awarded successfully');
+            } else {
+              console.log('🔗 Referral: Bonus already awarded for this user, skipping');
+            }
             
             // Send notification to inviter
             try {

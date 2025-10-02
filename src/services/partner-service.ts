@@ -199,23 +199,31 @@ export async function recordPartnerTransaction(profileId: string, amount: number
 }
 
 export async function recalculatePartnerBonuses(profileId: string) {
+  console.log(`🔄 Starting bonus recalculation for profile ${profileId}...`);
+  
   const allTransactions = await prisma.partnerTransaction.findMany({
     where: { profileId }
   });
   
+  console.log(`📊 Found ${allTransactions.length} transactions for profile ${profileId}`);
+  
   const totalBonus = allTransactions.reduce((sum, tx) => {
-    return sum + (tx.type === 'CREDIT' ? tx.amount : -tx.amount);
+    const amount = tx.type === 'CREDIT' ? tx.amount : -tx.amount;
+    console.log(`  - Transaction: ${tx.type} ${tx.amount} PZ (${tx.description})`);
+    return sum + amount;
   }, 0);
 
+  console.log(`💰 Total calculated bonus: ${totalBonus} PZ`);
+
   // Update partner profile bonus balance
-  await prisma.partnerProfile.update({
+  const updatedProfile = await prisma.partnerProfile.update({
     where: { id: profileId },
     data: {
       bonus: totalBonus
     }
   });
 
-  console.log(`🔄 Recalculated bonuses for profile ${profileId}: ${totalBonus} PZ`);
+  console.log(`✅ Updated profile ${profileId}: bonus = ${updatedProfile.bonus} PZ`);
   return totalBonus;
 }
 
