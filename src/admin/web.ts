@@ -1770,6 +1770,9 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <form method="post" action="/admin/recalculate-bonuses" style="display: inline;">
           <button type="submit" class="btn" style="background: #28a745;" onclick="return confirm('Пересчитать бонусы всех партнёров?')">🔄 Пересчитать бонусы</button>
         </form>
+        <form method="post" action="/admin/cleanup-duplicates" style="display: inline;">
+          <button type="submit" class="btn" style="background: #dc3545;" onclick="return confirm('⚠️ Удалить дублирующиеся записи партнёров и транзакций? Это действие необратимо!')">🧹 Очистить дубли</button>
+        </form>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -1781,9 +1784,11 @@ router.get('/partners', requireAdmin, async (req, res) => {
         ${req.query.success === 'balance_added' ? '<div class="alert alert-success">✅ Баланс успешно пополнен</div>' : ''}
         ${req.query.success === 'balance_subtracted' ? '<div class="alert alert-success">✅ Баланс успешно списан</div>' : ''}
         ${req.query.success === 'bonuses_recalculated' ? '<div class="alert alert-success">✅ Бонусы успешно пересчитаны</div>' : ''}
+        ${req.query.success === 'duplicates_cleaned' ? `<div class="alert alert-success">✅ Дубли очищены! Удалено ${req.query.referrals || 0} дублей рефералов и ${req.query.transactions || 0} дублей транзакций</div>` : ''}
         ${req.query.error === 'balance_add' ? '<div class="alert alert-error">❌ Ошибка при пополнении баланса</div>' : ''}
         ${req.query.error === 'balance_subtract' ? '<div class="alert alert-error">❌ Ошибка при списании баланса</div>' : ''}
         ${req.query.error === 'bonus_recalculation' ? '<div class="alert alert-error">❌ Ошибка при пересчёте бонусов</div>' : ''}
+        ${req.query.error === 'cleanup_failed' ? '<div class="alert alert-error">❌ Ошибка при очистке дублей</div>' : ''}
         <style>
           .change-inviter-btn { background: #10b981; color: white; padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-left: 5px; }
           .change-inviter-btn:hover { background: #059669; }
@@ -2470,6 +2475,112 @@ router.post('/recalculate-bonuses', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Bonus recalculation error:', error);
     res.redirect('/admin/partners?error=bonus_recalculation');
+  }
+});
+
+// Cleanup duplicates endpoint
+router.post('/cleanup-duplicates', requireAdmin, async (req, res) => {
+  try {
+    console.log('🧹 Starting cleanup of duplicate data...');
+    
+    // Find all partner profiles
+    const profiles = await prisma.partnerProfile.findMany({
+      include: {
+        referrals: true,
+        transactions: true
+      }
+    });
+    
+    let totalReferralsDeleted = 0;
+    let totalTransactionsDeleted = 0;
+    
+    for (const profile of profiles) {
+      console.log(`\n📊 Processing profile ${profile.id}...`);
+      
+      // Group referrals by referredId to find duplicates
+      const referralGroups = new Map();
+      profile.referrals.forEach(ref => {
+        if (ref.referredId) {
+          if (!referralGroups.has(ref.referredId)) {
+            referralGroups.set(ref.referredId, []);
+          }
+          referralGroups.get(ref.referredId).push(ref);
+        }
+      });
+      
+      // Remove duplicate referrals, keeping only the first one
+      for (const [referredId, referrals] of referralGroups) {
+        if (referrals.length > 1) {
+          console.log(`  🔄 Found ${referrals.length} duplicates for user ${referredId}`);
+          
+          // Sort by createdAt to keep the earliest
+          referrals.sort((a: any, b: any) => a.createdAt.getTime() - b.createdAt.getTime());
+          
+          // Keep the first one, delete the rest
+          const toDelete = referrals.slice(1);
+          for (const duplicate of toDelete) {
+            await prisma.partnerReferral.delete({
+              where: { id: duplicate.id }
+            });
+            totalReferralsDeleted++;
+            console.log(`    ❌ Deleted duplicate referral ${duplicate.id}`);
+          }
+        }
+      }
+      
+      // Group transactions by description to find duplicates
+      const transactionGroups = new Map();
+      profile.transactions.forEach(tx => {
+        const key = `${tx.description}-${tx.amount}-${tx.type}`;
+        if (!transactionGroups.has(key)) {
+          transactionGroups.set(key, []);
+        }
+        transactionGroups.get(key).push(tx);
+      });
+      
+      // Remove duplicate transactions, keeping only the first one
+      for (const [key, transactions] of transactionGroups) {
+        if (transactions.length > 1) {
+          console.log(`  🔄 Found ${transactions.length} duplicate transactions: ${key}`);
+          
+          // Sort by createdAt to keep the earliest
+          transactions.sort((a: any, b: any) => a.createdAt.getTime() - b.createdAt.getTime());
+          
+          // Keep the first one, delete the rest
+          const toDelete = transactions.slice(1);
+          for (const duplicate of toDelete) {
+            await prisma.partnerTransaction.delete({
+              where: { id: duplicate.id }
+            });
+            totalTransactionsDeleted++;
+            console.log(`    ❌ Deleted duplicate transaction ${duplicate.id}`);
+          }
+        }
+      }
+      
+      // Recalculate bonus from remaining transactions
+      const remainingTransactions = await prisma.partnerTransaction.findMany({
+        where: { profileId: profile.id }
+      });
+      
+      const totalBonus = remainingTransactions.reduce((sum, tx) => {
+        return sum + (tx.type === 'CREDIT' ? tx.amount : -tx.amount);
+      }, 0);
+      
+      // Update profile bonus
+      await prisma.partnerProfile.update({
+        where: { id: profile.id },
+        data: { bonus: totalBonus }
+      });
+      
+      console.log(`  ✅ Updated profile ${profile.id}: ${totalBonus} PZ bonus`);
+    }
+    
+    console.log(`\n🎉 Cleanup completed! Deleted ${totalReferralsDeleted} duplicate referrals and ${totalTransactionsDeleted} duplicate transactions.`);
+    res.redirect(`/admin/partners?success=duplicates_cleaned&referrals=${totalReferralsDeleted}&transactions=${totalTransactionsDeleted}`);
+  } catch (error) {
+    console.error('❌ Cleanup error:', error);
+    res.redirect('/admin/partners?error=cleanup_failed');
   }
 });
 
