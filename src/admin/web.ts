@@ -2951,7 +2951,7 @@ router.post('/cleanup-duplicate-bonuses', requireAdmin, async (req, res) => {
         orderBy: { createdAt: 'asc' }
       });
       
-      // Group by user ID (extract from description)
+      // Group by user ID (extract from description) or by amount+description for old format
       const bonusGroups = new Map<string, any[]>();
       
       for (const tx of transactions) {
@@ -2963,7 +2963,7 @@ router.post('/cleanup-duplicate-bonuses', requireAdmin, async (req, res) => {
             bonusGroups.set(userId, []);
           }
           bonusGroups.get(userId)!.push(tx);
-        } else {
+        } else if (tx.description === 'Бонус за приглашение друга') {
           // Old format without user ID - group by amount and description
           const key = `${tx.amount}-${tx.description}`;
           if (!bonusGroups.has(key)) {
@@ -3032,11 +3032,23 @@ router.post('/fix-roman-bonuses', requireAdmin, async (req, res) => {
     
     console.log(`📊 Roman has ${transactions.length} transactions:`);
     transactions.forEach(tx => {
-      console.log(`  - ${tx.type} ${tx.amount} PZ: ${tx.description}`);
+      console.log(`  - ${tx.type} ${tx.amount} PZ: ${tx.description} (${tx.createdAt})`);
     });
+    
+    // Check current bonus before recalculation
+    const currentProfile = await prisma.partnerProfile.findUnique({
+      where: { id: romanProfile.id }
+    });
+    console.log(`💰 Current bonus before recalculation: ${currentProfile?.bonus} PZ`);
     
     // Recalculate bonuses
     const totalBonus = await recalculatePartnerBonuses(romanProfile.id);
+    
+    // Check bonus after recalculation
+    const updatedProfile = await prisma.partnerProfile.findUnique({
+      where: { id: romanProfile.id }
+    });
+    console.log(`💰 Bonus after recalculation: ${updatedProfile?.bonus} PZ`);
     
     console.log(`✅ Roman Arctur bonuses fixed: ${totalBonus} PZ`);
     res.redirect(`/admin/partners?success=roman_bonuses_fixed&bonus=${totalBonus}`);
