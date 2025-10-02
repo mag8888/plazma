@@ -325,6 +325,7 @@ router.get('/', requireAdmin, async (req, res) => {
             <div class="section-header">
               <h2 class="section-title">👥 Управление пользователями v2.0</h2>
               <div class="action-buttons">
+                <a href="/admin/users-detailed" class="btn">👥 Детальная информация</a>
                 <a href="/admin/users" class="btn">📋 Список пользователей</a>
                 <a href="/admin/user-history" class="btn">📊 История действий</a>
               </div>
@@ -400,6 +401,508 @@ router.get('/', requireAdmin, async (req, res) => {
     res.status(500).send('Internal server error');
   }
 });
+
+// Detailed users management with sorting and filtering
+router.get('/users-detailed', requireAdmin, async (req, res) => {
+  try {
+    const sortBy = req.query.sort as string || 'activity';
+    const sortOrder = req.query.order as string || 'desc';
+    
+    // Get all users with their related data
+    const users = await prisma.user.findMany({
+      include: {
+        partner: {
+          include: {
+            referrals: true,
+            transactions: true
+          }
+        },
+        orders: true
+      },
+      orderBy: {
+        createdAt: sortOrder === 'desc' ? 'desc' : 'asc'
+      }
+    });
+
+    // Calculate additional data for each user
+    const usersWithStats = users.map((user: any) => {
+      const partnerProfile = user.partner;
+      const directPartners = partnerProfile?.referrals?.length || 0;
+      const totalOrderSum = user.orders?.reduce((sum: number, order: any) => {
+        // Parse itemsJson to calculate total
+        try {
+          const items = JSON.parse(order.itemsJson || '[]');
+          const orderTotal = items.reduce((itemSum: number, item: any) => itemSum + (item.price || 0) * (item.quantity || 1), 0);
+          return sum + orderTotal;
+        } catch {
+          return sum;
+        }
+      }, 0) || 0;
+      const balance = partnerProfile?.balance || 0;
+      const bonus = partnerProfile?.bonus || 0;
+      const lastActivity = user.updatedAt || user.createdAt;
+      
+      return {
+        ...user,
+        directPartners,
+        totalOrderSum,
+        balance,
+        bonus,
+        lastActivity
+      };
+    });
+
+    // Apply sorting
+    let sortedUsers = usersWithStats;
+    if (sortBy === 'balance') {
+      sortedUsers = usersWithStats.sort((a, b) => 
+        sortOrder === 'desc' ? b.balance - a.balance : a.balance - b.balance
+      );
+    } else if (sortBy === 'partners') {
+      sortedUsers = usersWithStats.sort((a, b) => 
+        sortOrder === 'desc' ? b.directPartners - a.directPartners : a.directPartners - b.directPartners
+      );
+    } else if (sortBy === 'orders') {
+      sortedUsers = usersWithStats.sort((a, b) => 
+        sortOrder === 'desc' ? b.totalOrderSum - a.totalOrderSum : a.totalOrderSum - b.totalOrderSum
+      );
+    } else if (sortBy === 'activity') {
+      sortedUsers = usersWithStats.sort((a, b) => 
+        sortOrder === 'desc' ? new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime() : 
+                               new Date(a.lastActivity).getTime() - new Date(b.lastActivity).getTime()
+      );
+    }
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Детальная информация о пользователях - Plazma Water Admin</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
+          .header p { margin: 10px 0 0 0; opacity: 0.9; font-size: 16px; }
+          
+          .controls { padding: 20px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; }
+          .sort-controls { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+          .sort-group { display: flex; gap: 10px; align-items: center; }
+          .sort-group label { font-weight: 600; color: #495057; }
+          .sort-group select, .sort-group button { padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px; }
+          .sort-group button { background: #007bff; color: white; border: none; cursor: pointer; }
+          .sort-group button:hover { background: #0056b3; }
+          
+          .stats-bar { display: flex; gap: 20px; padding: 15px 20px; background: #e3f2fd; border-bottom: 1px solid #bbdefb; }
+          .stat-item { text-align: center; }
+          .stat-number { font-size: 24px; font-weight: bold; color: #1976d2; }
+          .stat-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+          
+          .users-table { width: 100%; border-collapse: collapse; }
+          .users-table th { background: #f8f9fa; padding: 15px 12px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
+          .users-table td { padding: 15px 12px; border-bottom: 1px solid #dee2e6; vertical-align: top; }
+          .users-table tr:hover { background: #f8f9fa; }
+          
+          .user-info { display: flex; align-items: center; gap: 12px; }
+          .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px; }
+          .user-details h4 { margin: 0; font-size: 16px; color: #212529; }
+          .user-details p { margin: 2px 0 0 0; font-size: 13px; color: #6c757d; }
+          
+          .balance { font-weight: bold; font-size: 16px; }
+          .balance.positive { color: #28a745; }
+          .balance.zero { color: #6c757d; }
+          
+          .partners-count { background: #e3f2fd; color: #1976d2; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+          .orders-sum { background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+          
+          .action-btn { background: #007bff; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 2px; }
+          .action-btn:hover { background: #0056b3; }
+          .action-btn.hierarchy { background: #28a745; }
+          .action-btn.hierarchy:hover { background: #1e7e34; }
+          
+          .back-btn { background: #6c757d; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; display: inline-block; margin-bottom: 20px; }
+          .back-btn:hover { background: #5a6268; }
+          
+          .empty-state { text-align: center; padding: 60px 20px; color: #6c757d; }
+          .empty-state h3 { margin: 0 0 10px 0; font-size: 24px; }
+          .empty-state p { margin: 0; font-size: 16px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>👥 Детальная информация о пользователях</h1>
+            <p>Полная статистика, балансы, партнёры и заказы</p>
+          </div>
+          
+          <div class="controls">
+            <div class="sort-controls">
+              <div class="sort-group">
+                <label>Сортировать по:</label>
+                <select id="sortSelect">
+                  <option value="activity" ${sortBy === 'activity' ? 'selected' : ''}>Активности</option>
+                  <option value="balance" ${sortBy === 'balance' ? 'selected' : ''}>Балансу</option>
+                  <option value="partners" ${sortBy === 'partners' ? 'selected' : ''}>Количеству партнёров</option>
+                  <option value="orders" ${sortBy === 'orders' ? 'selected' : ''}>Сумме заказов</option>
+                </select>
+              </div>
+              
+              <div class="sort-group">
+                <label>Порядок:</label>
+                <select id="orderSelect">
+                  <option value="desc" ${sortOrder === 'desc' ? 'selected' : ''}>По убыванию</option>
+                  <option value="asc" ${sortOrder === 'asc' ? 'selected' : ''}>По возрастанию</option>
+                </select>
+              </div>
+              
+              <button onclick="applySorting()">🔄 Применить</button>
+            </div>
+          </div>
+          
+          <div class="stats-bar">
+            <div class="stat-item">
+              <div class="stat-number">${sortedUsers.length}</div>
+              <div class="stat-label">Всего пользователей</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">${sortedUsers.filter(u => u.balance > 0).length}</div>
+              <div class="stat-label">С балансом</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">${sortedUsers.filter(u => u.directPartners > 0).length}</div>
+              <div class="stat-label">Партнёры</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-number">${sortedUsers.reduce((sum, u) => sum + u.totalOrderSum, 0).toFixed(2)} PZ</div>
+              <div class="stat-label">Общая сумма заказов</div>
+            </div>
+          </div>
+          
+          ${sortedUsers.length === 0 ? `
+            <div class="empty-state">
+              <h3>📭 Нет пользователей</h3>
+              <p>Пользователи появятся здесь после регистрации</p>
+            </div>
+          ` : `
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>Пользователь</th>
+                  <th>Баланс</th>
+                  <th>Партнёры</th>
+                  <th>Заказы</th>
+                  <th>Последняя активность</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sortedUsers.map(user => `
+                  <tr>
+                    <td>
+                      <div class="user-info">
+                        <div class="user-avatar">${(user.firstName || 'U')[0].toUpperCase()}</div>
+                        <div class="user-details">
+                          <h4>${user.firstName || 'Без имени'} ${user.lastName || ''}</h4>
+                          <p>@${user.username || 'без username'}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="balance ${user.balance > 0 ? 'positive' : 'zero'}">
+                        ${user.balance.toFixed(2)} PZ
+                      </div>
+                      ${user.bonus > 0 ? `<div style="font-size: 11px; color: #6c757d;">Бонусы: ${user.bonus.toFixed(2)} PZ</div>` : ''}
+                    </td>
+                    <td>
+                      <div class="partners-count">${user.directPartners} прямых</div>
+                    </td>
+                    <td>
+                      <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
+                      <div style="font-size: 11px; color: #6c757d;">${user.orders?.length || 0} заказов</div>
+                    </td>
+                    <td>
+                      <div style="font-size: 13px; color: #6c757d;">
+                        ${user.lastActivity.toLocaleString('ru-RU')}
+                      </div>
+                    </td>
+                    <td>
+                      ${user.partner ? `
+                        <button class="action-btn hierarchy" onclick="showHierarchy('${user.id}')">
+                          🌳 Иерархия
+                        </button>
+                      ` : ''}
+                      <button class="action-btn" onclick="showUserDetails('${user.id}')">
+                        👁 Подробно
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `}
+          
+          <div style="padding: 20px; text-align: center; border-top: 1px solid #e9ecef;">
+            <a href="/admin" class="back-btn">← Назад в админ-панель</a>
+          </div>
+        </div>
+        
+        <script>
+          function applySorting() {
+            const sortBy = document.getElementById('sortSelect').value;
+            const order = document.getElementById('orderSelect').value;
+            window.location.href = \`/admin/users-detailed?sort=\${sortBy}&order=\${order}\`;
+          }
+          
+          function showHierarchy(userId) {
+            window.open(\`/admin/partners-hierarchy?user=\${userId}\`, '_blank', 'width=800,height=600');
+          }
+          
+          function showUserDetails(userId) {
+            window.open(\`/admin/users/\${userId}\`, '_blank', 'width=600,height=400');
+          }
+        </script>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('❌ Detailed users page error:', error);
+    res.status(500).send('Ошибка загрузки страницы пользователей');
+  }
+});
+
+// Individual user details page
+router.get('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        partner: {
+          include: {
+            referrals: true,
+            transactions: {
+              orderBy: { createdAt: 'desc' },
+              take: 10
+            }
+          }
+        },
+        orders: {
+          orderBy: { createdAt: 'desc' }
+        },
+        histories: {
+          orderBy: { createdAt: 'desc' },
+          take: 20
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).send('Пользователь не найден');
+    }
+
+    const partnerProfile = (user as any).partner;
+    const directPartners = partnerProfile?.referrals?.length || 0;
+    const totalOrderSum = (user as any).orders?.reduce((sum: number, order: any) => {
+      // Parse itemsJson to calculate total
+      try {
+        const items = JSON.parse(order.itemsJson || '[]');
+        const orderTotal = items.reduce((itemSum: number, item: any) => itemSum + (item.price || 0) * (item.quantity || 1), 0);
+        return sum + orderTotal;
+      } catch {
+        return sum;
+      }
+    }, 0) || 0;
+    const balance = partnerProfile?.balance || 0;
+    const bonus = partnerProfile?.bonus || 0;
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Детали пользователя - ${user.firstName || 'Без имени'}</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+          .content { padding: 30px; }
+          .section { margin-bottom: 30px; }
+          .section h3 { margin: 0 0 15px 0; color: #333; font-size: 18px; }
+          .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
+          .info-card { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; }
+          .info-card h4 { margin: 0 0 8px 0; color: #495057; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .info-card p { margin: 0; font-size: 20px; font-weight: bold; color: #212529; }
+          .balance { color: #28a745; }
+          .balance.zero { color: #6c757d; }
+          .table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #dee2e6; }
+          .table th { background: #f8f9fa; font-weight: 600; color: #495057; }
+          .table tr:hover { background: #f8f9fa; }
+          .back-btn { background: #6c757d; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; display: inline-block; margin-bottom: 20px; }
+          .back-btn:hover { background: #5a6268; }
+          .empty-state { text-align: center; padding: 40px; color: #6c757d; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>👤 ${user.firstName || 'Без имени'} ${user.lastName || ''}</h1>
+            <p>@${user.username || 'без username'} • ID: ${user.id}</p>
+          </div>
+          
+          <div class="content">
+            <div class="section">
+              <h3>📊 Основная информация</h3>
+              <div class="info-grid">
+                <div class="info-card">
+                  <h4>Баланс</h4>
+                  <p class="balance ${balance > 0 ? '' : 'zero'}">${balance.toFixed(2)} PZ</p>
+                </div>
+                <div class="info-card">
+                  <h4>Всего бонусов</h4>
+                  <p class="balance ${bonus > 0 ? '' : 'zero'}">${bonus.toFixed(2)} PZ</p>
+                </div>
+                <div class="info-card">
+                  <h4>Прямых партнёров</h4>
+                  <p>${directPartners}</p>
+                </div>
+                <div class="info-card">
+                  <h4>Сумма заказов</h4>
+                  <p>${totalOrderSum.toFixed(2)} PZ</p>
+                </div>
+                <div class="info-card">
+                  <h4>Дата регистрации</h4>
+                  <p>${user.createdAt.toLocaleString('ru-RU')}</p>
+                </div>
+                <div class="info-card">
+                  <h4>Последняя активность</h4>
+                  <p>${(user.updatedAt || user.createdAt).toLocaleString('ru-RU')}</p>
+                </div>
+              </div>
+            </div>
+
+            ${partnerProfile ? `
+              <div class="section">
+                <h3>🤝 Партнёрская информация</h3>
+                <div class="info-grid">
+                  <div class="info-card">
+                    <h4>Тип программы</h4>
+                    <p>${partnerProfile.programType === 'DIRECT' ? 'Прямая (25%)' : 'Многоуровневая (15%+5%+5%)'}</p>
+                  </div>
+                  <div class="info-card">
+                    <h4>Реферальный код</h4>
+                    <p>${partnerProfile.referralCode}</p>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            ${(user as any).orders && (user as any).orders.length > 0 ? `
+              <div class="section">
+                <h3>🛒 Последние заказы</h3>
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Товар</th>
+                      <th>Цена</th>
+                      <th>Дата</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${(user as any).orders.map((order: any) => {
+                      try {
+                        const items = JSON.parse(order.itemsJson || '[]');
+                        const orderTotal = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+                        const itemNames = items.map((item: any) => `${item.name || 'Товар'} (${item.quantity || 1} шт.)`).join(', ');
+                        return `
+                          <tr>
+                            <td>${itemNames || 'Заказ'}</td>
+                            <td>${orderTotal.toFixed(2)} PZ</td>
+                            <td>${order.createdAt.toLocaleString('ru-RU')}</td>
+                          </tr>
+                        `;
+                      } catch {
+                        return `
+                          <tr>
+                            <td>Заказ #${order.id}</td>
+                            <td>0.00 PZ</td>
+                            <td>${order.createdAt.toLocaleString('ru-RU')}</td>
+                          </tr>
+                        `;
+                      }
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+
+            ${partnerProfile?.transactions && partnerProfile.transactions.length > 0 ? `
+              <div class="section">
+                <h3>💰 Последние транзакции</h3>
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Тип</th>
+                      <th>Сумма</th>
+                      <th>Описание</th>
+                      <th>Дата</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${partnerProfile.transactions.map((tx: any) => `
+                      <tr>
+                        <td>${tx.type === 'CREDIT' ? '➕ Пополнение' : '➖ Списание'}</td>
+                        <td class="${tx.type === 'CREDIT' ? 'balance' : ''}">${tx.amount.toFixed(2)} PZ</td>
+                        <td>${tx.description}</td>
+                        <td>${tx.createdAt.toLocaleString('ru-RU')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+
+            ${(user as any).histories && (user as any).histories.length > 0 ? `
+              <div class="section">
+                <h3>📈 Последние действия</h3>
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Действие</th>
+                      <th>Данные</th>
+                      <th>Дата</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${(user as any).histories.map((action: any) => `
+                      <tr>
+                        <td>${action.action}</td>
+                        <td>${action.payload ? JSON.stringify(action.payload) : '-'}</td>
+                        <td>${action.createdAt.toLocaleString('ru-RU')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
+          </div>
+          
+          <div style="padding: 20px; text-align: center; border-top: 1px solid #e9ecef;">
+            <a href="/admin/users-detailed" class="back-btn">← Назад к списку</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('❌ User details page error:', error);
+    res.status(500).send('Ошибка загрузки деталей пользователя');
+  }
+});
+
 router.get('/categories', requireAdmin, async (req, res) => {
   try {
     console.log('📁 Admin categories page accessed');
