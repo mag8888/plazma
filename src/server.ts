@@ -54,6 +54,14 @@ async function bootstrap() {
 
     console.log('Starting bot in long polling mode...');
     
+    // Clear any existing webhook first
+    try {
+      await bot.telegram.deleteWebhook();
+      console.log('Cleared existing webhook');
+    } catch (error) {
+      console.log('No webhook to clear or error clearing:', error instanceof Error ? error.message : String(error));
+    }
+    
     // Try to launch bot with error handling
     try {
       await bot.launch();
