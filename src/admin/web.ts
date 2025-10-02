@@ -900,6 +900,20 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-actions .image-btn:hover { background: #059669; }
           .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
           img.product-image { width: 100%; height: 160px; object-fit: cover; border-radius: 10px; }
+          .product-image-placeholder { 
+            width: 100%; 
+            height: 160px; 
+            border: 2px dashed #d1d5db; 
+            border-radius: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            background: #f9fafb; 
+            color: #6b7280; 
+          }
+          .placeholder-icon { font-size: 32px; margin-bottom: 8px; }
+          .placeholder-text { font-size: 14px; font-weight: 500; }
           .alert { padding: 12px 16px; margin: 16px 0; border-radius: 8px; font-weight: 500; }
           .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
           .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
@@ -949,7 +963,10 @@ router.get('/products', requireAdmin, async (req, res) => {
       const createdAt = new Date(product.createdAt).toLocaleDateString();
       const imageSection = product.imageUrl
         ? `<img src="${product.imageUrl}" alt="${product.title}" class="product-image" loading="lazy">`
-        : '';
+        : `<div class="product-image-placeholder">
+             <span class="placeholder-icon">📷</span>
+             <span class="placeholder-text">Нет фото</span>
+           </div>`;
 
       html += `
           <div class="product-card" data-category="${product.categoryId}">
