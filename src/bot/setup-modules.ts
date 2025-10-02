@@ -9,8 +9,8 @@ import { aboutModule } from '../modules/about/index.js';
 import { adminModule } from '../modules/admin/index.js';
 
 const modules: BotModule[] = [
+  shopModule,        // Register shop module first to handle shop button
   navigationModule,
-  shopModule,
   partnerModule,
   reviewsModule,
   aboutModule,

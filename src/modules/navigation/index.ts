@@ -176,6 +176,13 @@ export const navigationModule: BotModule = {
       await ctx.reply(introDetails);
     });
 
+    // Handle "Магазин" button - delegate to shop module
+    bot.hears(['🛒 Магазин'], async (ctx) => {
+      await logUserAction(ctx, 'menu:shop');
+      // This will be handled by shop module - just log and let it handle
+      console.log('🛒 Shop button pressed, delegating to shop module');
+    });
+
     // Handle "Партнёрка" button  
     bot.hears(['💰 Партнёрка'], async (ctx) => {
       await logUserAction(ctx, 'menu:partner');
