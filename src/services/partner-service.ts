@@ -137,38 +137,43 @@ export async function getPartnerList(userId: string) {
     where: { id: { in: multiUserIds } }
   });
 
-  // Combine user data with referral data
-  const directPartners = directReferrals
+  // Combine user data with referral data, removing duplicates
+  const directPartnersMap = new Map();
+  directReferrals
     .filter(ref => ref.referredId)
-    .map(ref => {
+    .forEach(ref => {
       const user = directUsers.find(u => u.id === ref.referredId);
-      if (!user) return null;
-      return {
-        id: user.id,
-        firstName: user.firstName || 'Пользователь',
-        username: user.username,
-        telegramId: user.telegramId,
-        level: ref.level,
-        joinedAt: ref.createdAt
-      };
-    })
-    .filter((partner): partner is NonNullable<typeof partner> => partner !== null);
+      if (user && !directPartnersMap.has(user.id)) {
+        directPartnersMap.set(user.id, {
+          id: user.id,
+          firstName: user.firstName || 'Пользователь',
+          username: user.username,
+          telegramId: user.telegramId,
+          level: ref.level,
+          joinedAt: ref.createdAt
+        });
+      }
+    });
 
-  const multiPartners = multiReferrals
+  const multiPartnersMap = new Map();
+  multiReferrals
     .filter(ref => ref.referredId)
-    .map(ref => {
+    .forEach(ref => {
       const user = multiUsers.find(u => u.id === ref.referredId);
-      if (!user) return null;
-      return {
-        id: user.id,
-        firstName: user.firstName || 'Пользователь',
-        username: user.username,
-        telegramId: user.telegramId,
-        level: ref.level,
-        joinedAt: ref.createdAt
-      };
-    })
-    .filter((partner): partner is NonNullable<typeof partner> => partner !== null);
+      if (user && !multiPartnersMap.has(user.id)) {
+        multiPartnersMap.set(user.id, {
+          id: user.id,
+          firstName: user.firstName || 'Пользователь',
+          username: user.username,
+          telegramId: user.telegramId,
+          level: ref.level,
+          joinedAt: ref.createdAt
+        });
+      }
+    });
+
+  const directPartners = Array.from(directPartnersMap.values());
+  const multiPartners = Array.from(multiPartnersMap.values());
 
   return {
     directPartners,
@@ -177,7 +182,8 @@ export async function getPartnerList(userId: string) {
 }
 
 export async function recordPartnerTransaction(profileId: string, amount: number, description: string, type: TransactionType = 'CREDIT') {
-  return prisma.partnerTransaction.create({
+  // Create transaction
+  const transaction = await prisma.partnerTransaction.create({
     data: {
       profileId,
       amount,
@@ -185,6 +191,19 @@ export async function recordPartnerTransaction(profileId: string, amount: number
       type,
     },
   });
+
+  // Update partner profile bonus balance
+  const increment = type === 'CREDIT' ? amount : -amount;
+  await prisma.partnerProfile.update({
+    where: { id: profileId },
+    data: {
+      bonus: {
+        increment: increment
+      }
+    }
+  });
+
+  return transaction;
 }
 
 export async function createPartnerReferral(profileId: string, level: number, referredId?: string, contact?: string) {

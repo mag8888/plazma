@@ -1787,7 +1787,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
           .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         </style>
         <table>
-          <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Партнёров</th><th>Код</th><th>Пригласитель</th><th>Создан</th><th>Действия</th></tr>
+          <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Бонусы</th><th>Партнёров</th><th>Код</th><th>Пригласитель</th><th>Создан</th><th>Действия</th></tr>
     `;
 
     partnersWithInviters.forEach(partner => {
@@ -1796,6 +1796,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
           <td>${partner.user.firstName || 'Не указан'}</td>
           <td>${partner.programType === 'DIRECT' ? 'Прямая (25%)' : 'Многоуровневая (15%+5%+5%)'}</td>
           <td>${partner.balance} PZ</td>
+          <td>${partner.bonus} PZ</td>
           <td>${partner.totalPartners}</td>
           <td>${partner.referralCode}</td>
           <td>
