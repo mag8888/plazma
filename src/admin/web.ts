@@ -1512,12 +1512,45 @@ router.get('/categories', requireAdmin, async (req, res) => {
 router.get('/partners', requireAdmin, async (req, res) => {
   try {
     const partners = await prisma.partnerProfile.findMany({
-      include: { user: true },
+      include: { 
+        user: true,
+        referrals: {
+          include: {
+            profile: {
+              include: {
+                user: true
+              }
+            }
+          }
+        }
+      },
       orderBy: { createdAt: 'desc' }
     });
 
     // Calculate total balance of all partners
     const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
+
+    // Find inviters for each partner
+    const partnersWithInviters = await Promise.all(
+      partners.map(async (partner) => {
+        // Find who invited this partner
+        const inviterReferral = await prisma.partnerReferral.findFirst({
+          where: { referredId: partner.user.id },
+          include: {
+            profile: {
+              include: {
+                user: true
+              }
+            }
+          }
+        });
+
+        return {
+          ...partner,
+          inviter: inviterReferral?.profile?.user || null
+        };
+      })
+    );
 
     let html = `
       <!DOCTYPE html>
@@ -1538,6 +1571,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <h2>👥 Управление партнёрами v2.0</h2>
         <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
+        <a href="/admin/partners-hierarchy" class="btn" style="background: #6f42c1;">🌳 Иерархия партнёров</a>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -1561,7 +1595,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
           <tr><th>Пользователь</th><th>Тип программы</th><th>Баланс</th><th>Партнёров</th><th>Код</th><th>Пригласитель</th><th>Создан</th><th>Действия</th></tr>
     `;
 
-    partners.forEach(partner => {
+    partnersWithInviters.forEach(partner => {
       html += `
         <tr>
           <td>${partner.user.firstName || 'Не указан'}</td>
@@ -1569,7 +1603,12 @@ router.get('/partners', requireAdmin, async (req, res) => {
           <td>${partner.balance} PZ</td>
           <td>${partner.totalPartners}</td>
           <td>${partner.referralCode}</td>
-          <td>Нет данных</td>
+          <td>
+            ${partner.inviter 
+              ? `${partner.inviter.firstName || ''} ${partner.inviter.lastName || ''} ${partner.inviter.username ? `(@${partner.inviter.username})` : ''}`.trim()
+              : 'Нет данных'
+            }
+          </td>
           <td>${new Date(partner.createdAt).toLocaleDateString()}</td>
           <td>
             <div style="display: flex; gap: 5px; flex-wrap: wrap;">
@@ -1601,6 +1640,148 @@ router.get('/partners', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('Partners page error:', error);
     res.status(500).send('Ошибка загрузки партнёров');
+  }
+});
+
+// Partners hierarchy route
+router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
+  try {
+    // Get all partners with their referrals
+    const partners = await prisma.partnerProfile.findMany({
+      include: {
+        user: true,
+        referrals: {
+          include: {
+            profile: {
+              include: {
+                user: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Find inviters for each partner
+    const partnersWithInviters = await Promise.all(
+      partners.map(async (partner) => {
+        const inviterReferral = await prisma.partnerReferral.findFirst({
+          where: { referredId: partner.user.id },
+          include: {
+            profile: {
+              include: {
+                user: true
+              }
+            }
+          }
+        });
+
+        return {
+          ...partner,
+          inviter: inviterReferral?.profile?.user || null
+        };
+      })
+    );
+
+    // Build hierarchy tree
+    function buildHierarchyTree() {
+      const rootPartners = partnersWithInviters.filter(p => !p.inviter);
+      const hierarchyHtml: string[] = [];
+
+      function buildPartnerNode(partner: any, level = 0) {
+        const indent = '  '.repeat(level);
+        const levelEmoji = level === 0 ? '👑' : level === 1 ? '🥈' : level === 2 ? '🥉' : '📋';
+        const partnerName = `${partner.user.firstName || ''} ${partner.user.lastName || ''}`.trim();
+        const username = partner.user.username ? ` (@${partner.user.username})` : '';
+        const balance = partner.balance.toFixed(2);
+        const referrals = partner.referrals.length;
+        
+        let node = `${indent}${levelEmoji} ${partnerName}${username} - ${balance} PZ (${referrals} рефералов)\n`;
+        
+        // Add referrals
+        const directReferrals = partnersWithInviters.filter(p => 
+          p.inviter && p.inviter.id === partner.user.id
+        );
+        
+        directReferrals.forEach(referral => {
+          node += buildPartnerNode(referral, level + 1);
+        });
+        
+        return node;
+      }
+
+      rootPartners.forEach(rootPartner => {
+        hierarchyHtml.push(buildPartnerNode(rootPartner));
+      });
+
+      return hierarchyHtml.join('\n');
+    }
+
+    const hierarchyTree = buildHierarchyTree();
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Иерархия партнёров</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; }
+          h2 { color: #333; margin-bottom: 20px; }
+          .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          .hierarchy-tree { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; white-space: pre-line; font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.6; border: 1px solid #e9ecef; }
+          .stats { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; text-align: center; }
+          .stat-item h4 { margin: 0; color: #1976d2; }
+          .stat-item p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>🌳 Иерархия партнёров v2.0</h2>
+          <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
+          <a href="/admin/partners" class="btn">← К партнёрам</a>
+          <a href="/admin" class="btn">🏠 Главная</a>
+          
+          <div class="stats">
+            <div class="stat-item">
+              <h4>Всего партнёров</h4>
+              <p>${partnersWithInviters.length}</p>
+            </div>
+            <div class="stat-item">
+              <h4>Корневых партнёров</h4>
+              <p>${partnersWithInviters.filter(p => !p.inviter).length}</p>
+            </div>
+            <div class="stat-item">
+              <h4>Общий баланс</h4>
+              <p>${partnersWithInviters.reduce((sum, p) => sum + p.balance, 0).toFixed(2)} PZ</p>
+            </div>
+          </div>
+          
+          <div class="hierarchy-tree">
+            <h3>🌳 Дерево партнёрской иерархии:</h3>
+            ${hierarchyTree || 'Партнёрская иерархия пуста'}
+          </div>
+          
+          <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+            <h4 style="margin: 0 0 10px 0; color: #856404;">📋 Обозначения:</h4>
+            <p style="margin: 0; color: #856404;">
+              👑 Корневые партнёры (без пригласителя)<br>
+              🥈 Партнёры 1-го уровня<br>
+              🥉 Партнёры 2-го уровня<br>
+              📋 Партнёры 3-го уровня и ниже
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Partners hierarchy error:', error);
+    res.status(500).send('Ошибка загрузки иерархии партнёров');
   }
 });
 
