@@ -970,7 +970,35 @@ router.get('/users', requireAdmin, async (req, res) => {
           .alert { padding: 10px; margin: 10px 0; border-radius: 4px; }
           .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
           .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+          
+          /* Hierarchy styles */
+          .hierarchy-level-0 { border-left: 4px solid #fbbf24; }
+          .hierarchy-level-1 { border-left: 4px solid #10b981; }
+          .hierarchy-level-2 { border-left: 4px solid #3b82f6; }
+          .hierarchy-level-3 { border-left: 4px solid #8b5cf6; }
+          
+          .level-icon {
+            font-size: 14px;
+            margin-right: 5px;
+          }
+          
+          .hierarchy-info {
+            background: #f3f4f6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+          }
         </style>
+        <div class="hierarchy-info">
+          <h4>🏗️ Иерархическая структура реферальной сети:</h4>
+          <p><strong>👑</strong> Уровень 0 - Корневые пользователи (без пригласителя)</p>
+          <p><strong>👤</strong> Уровень 1 - Прямые рефералы</p>
+          <p><strong>👥</strong> Уровень 2 - Рефералы 2-го уровня</p>
+          <p><strong>👶</strong> Уровень 3+ - Глубокие уровни</p>
+          <p><em>Цветные полосы слева показывают уровень иерархии</em></p>
+        </div>
+        
         <table>
           <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Чей реферал</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
     `;
@@ -998,14 +1026,54 @@ router.get('/users', requireAdmin, async (req, res) => {
       }
     });
 
-    users.forEach(user => {
-      // Find who invited this user
+    // Build hierarchy tree
+    const buildHierarchy = (): { user: any, level: number, children: any[] }[] => {
+      const hierarchy: { user: any, level: number, children: any[] }[] = [];
+      const userMap = new Map();
+      
+      // Create user map
+      users.forEach(user => {
+        userMap.set(user.id, { user, level: 0, children: [] });
+      });
+      
+      // Build parent-child relationships
+      referrals.forEach(referral => {
+        if (referral.referredId) {
+          const child = userMap.get(referral.referredId);
+          if (child) {
+            const parent = userMap.get(referral.profile.user.id);
+            if (parent) {
+              child.level = parent.level + 1;
+              parent.children.push(child);
+            }
+          }
+        }
+      });
+      
+      // Find root users (no parents)
+      const roots = Array.from(userMap.values()).filter(item => {
+        return !referrals.some(r => r.referredId === item.user.id);
+      });
+      
+      // Sort by creation date
+      roots.sort((a, b) => new Date(a.user.createdAt).getTime() - new Date(b.user.createdAt).getTime());
+      
+      return roots;
+    };
+
+    const hierarchy = buildHierarchy();
+    
+    const renderUser = (item: { user: any, level: number, children: any[] }, index: number) => {
+      const user = item.user;
       const referral = referrals.find(r => r.referredId === user.id);
       const inviterInfo = referral ? `${referral.profile.user.firstName || 'Не указано'} (@${referral.profile.user.username || referral.profile.user.telegramId})` : 'Нет пригласителя';
       
-      html += `
-        <tr>
-          <td>${user.id.slice(0, 8)}...</td>
+      const indent = '&nbsp;'.repeat(item.level * 4);
+      const levelIcon = item.level === 0 ? '👑' : item.level === 1 ? '👤' : item.level === 2 ? '👥' : '👶';
+      
+      let html = `
+        <tr class="hierarchy-level-${item.level}" style="background-color: ${item.level % 2 === 0 ? '#f9f9f9' : '#ffffff'};">
+          <td>${indent}<span class="level-icon">${levelIcon}</span> ${user.id.slice(0, 8)}...</td>
           <td>${user.telegramId}</td>
           <td>${user.firstName || 'Не указано'}</td>
           <td>${user.username ? '@' + user.username : 'Не указано'}</td>
@@ -1032,6 +1100,17 @@ router.get('/users', requireAdmin, async (req, res) => {
           </td>
         </tr>
       `;
+      
+      // Add children recursively
+      item.children.forEach(child => {
+        html += renderUser(child, index + 1);
+      });
+      
+      return html;
+    };
+
+    hierarchy.forEach((root, index) => {
+      html += renderUser(root, index);
     });
 
     html += `
