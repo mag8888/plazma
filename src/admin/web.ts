@@ -137,7 +137,8 @@ router.get('/', requireAdmin, async (req, res) => {
       <body>
         <div class="container">
           <div class="header">
-            <h1>🔧 Plazma Bot Admin Panel</h1>
+            <h1>🔧 Plazma Bot Admin Panel v2.0</h1>
+            <p style="color: #666; margin: 5px 0; font-size: 14px;">Версия: 2.0 | Дата: ${new Date().toLocaleString()}</p>
             <a href="/admin/logout" class="btn btn-danger logout">Выйти</a>
           </div>
 
@@ -987,7 +988,8 @@ router.get('/partners-network', requireAdmin, async (req, res) => {
         </style>
       </head>
       <body>
-        <h2>🌐 Сетка партнёров</h2>
+        <h2>🌐 Сетка партнёров v2.0</h2>
+        <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
         <a href="/admin/partners" class="btn">📊 Партнёры</a>
         
@@ -1031,7 +1033,8 @@ router.get('/users', requireAdmin, async (req, res) => {
         </style>
       </head>
       <body>
-        <h2>👥 Управление пользователями</h2>
+        <h2>👥 Управление пользователями v2.0</h2>
+        <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
         
         ${req.query.success === 'user_deleted' ? '<div class="alert alert-success">✅ Пользователь успешно удален</div>' : ''}
@@ -1212,7 +1215,8 @@ router.get('/partners', requireAdmin, async (req, res) => {
         </style>
       </head>
       <body>
-        <h2>👥 Управление партнёрами</h2>
+        <h2>👥 Управление партнёрами v2.0</h2>
+        <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
         
         ${req.query.success === 'inviter_changed' ? '<div class="alert alert-success">✅ Пригласитель успешно изменен</div>' : ''}
@@ -1624,7 +1628,8 @@ router.get('/orders', requireAdmin, async (req, res) => {
         </style>
       </head>
       <body>
-        <h2>📦 Управление заказами</h2>
+        <h2>📦 Управление заказами v2.0</h2>
+        <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
         
         ${req.query.success === 'order_updated' ? '<div class="alert alert-success">✅ Статус заказа обновлен</div>' : ''}
