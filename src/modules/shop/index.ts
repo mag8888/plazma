@@ -20,11 +20,17 @@ async function showCategories(ctx: Context) {
     return;
   }
 
-  const buttons = categories.map((category: any) => [
-    Markup.button.callback(category.name, `${CATEGORY_ACTION_PREFIX}${category.id}`),
-  ]);
-
-  await ctx.reply('Выберите категорию:', Markup.inlineKeyboard(buttons));
+  // Show catalog with products grouped by categories
+  await ctx.reply('🛍️ Каталог товаров Plazma Water\n\nВыберите категорию:', {
+    reply_markup: {
+      inline_keyboard: categories.map((category: any) => [
+        {
+          text: `📂 ${category.name}`,
+          callback_data: `${CATEGORY_ACTION_PREFIX}${category.id}`,
+        },
+      ]),
+    },
+  });
 }
 
 function formatProductMessage(product: { title: string; summary: string; price: unknown }) {
@@ -46,18 +52,43 @@ async function sendProductCards(ctx: Context, categoryId: string) {
     return;
   }
 
-  await ctx.reply(`Категория: ${category.name}`);
+  // Show category header
+  await ctx.reply(`📂 ${category.name}\n\nТовары в категории:`);
 
+  // Send products in a grid layout
   for (const product of products) {
     const buttons = [];
     if (product.description) {
-      buttons.push(Markup.button.callback('Подробнее', `${PRODUCT_MORE_PREFIX}${product.id}`));
+      buttons.push(Markup.button.callback('📖 Подробнее', `${PRODUCT_MORE_PREFIX}${product.id}`));
     }
-    buttons.push(Markup.button.callback('В корзину', `${PRODUCT_CART_PREFIX}${product.id}`));
-    buttons.push(Markup.button.callback('Купить', `${PRODUCT_BUY_PREFIX}${product.id}`));
+    buttons.push(Markup.button.callback('🛒 В корзину', `${PRODUCT_CART_PREFIX}${product.id}`));
+    buttons.push(Markup.button.callback('💳 Купить', `${PRODUCT_BUY_PREFIX}${product.id}`));
 
-    await ctx.reply(formatProductMessage(product), Markup.inlineKeyboard([buttons]));
+    const message = formatProductMessage(product);
+    
+    if (product.imageUrl) {
+      await ctx.replyWithPhoto(product.imageUrl, {
+        caption: message,
+        ...Markup.inlineKeyboard([buttons]),
+      });
+    } else {
+      await ctx.reply(message, Markup.inlineKeyboard([buttons]));
+    }
   }
+
+  // Add back to categories button
+  await ctx.reply('Выберите действие:', {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: '🔙 К категориям',
+            callback_data: 'shop:categories',
+          },
+        ],
+      ],
+    },
+  });
 }
 
 async function handleAddToCart(ctx: Context, productId: string) {
@@ -185,6 +216,12 @@ export const shopModule: BotModule = {
       const match = ctx.match as RegExpExecArray;
       const productId = match[1];
       await handleBuy(ctx, productId);
+    });
+
+    // Handle back to categories button
+    bot.action('shop:categories', async (ctx) => {
+      await ctx.answerCbQuery();
+      await showCategories(ctx);
     });
   },
 };

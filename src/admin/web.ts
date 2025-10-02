@@ -482,6 +482,10 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
   try {
     const { title, summary, description, price_rub, price, categoryId } = req.body;
     
+    console.log('Product creation request body:', req.body);
+    console.log('Category ID:', categoryId);
+    console.log('Price RUB:', price_rub);
+    
     // Convert RUB to PZ (1 PZ = 100 RUB)
     const rubPrice = parseFloat(price_rub) || 0;
     const pzPrice = rubPrice / 100;
