@@ -80,6 +80,14 @@ router.post('/login', (req, res) => {
 // Main admin panel
 router.get('/', requireAdmin, async (req, res) => {
   try {
+    // Get total balance from all partners
+    const totalBalanceResult = await prisma.partnerProfile.aggregate({
+      _sum: {
+        balance: true
+      }
+    });
+    const totalBalance = totalBalanceResult._sum.balance || 0;
+
     const stats = {
       categories: await prisma.category.count(),
       products: await prisma.product.count(),
@@ -87,6 +95,7 @@ router.get('/', requireAdmin, async (req, res) => {
       reviews: await prisma.review.count(),
       orders: await prisma.orderRequest.count(),
       users: await prisma.user.count(),
+      totalBalance: totalBalance,
     };
 
     res.send(`
@@ -119,6 +128,22 @@ router.get('/', requireAdmin, async (req, res) => {
           }
           .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
           .stat-label { color: #666; margin-top: 5px; }
+          
+          .balance-summary { margin: 20px 0; }
+          .balance-card { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            display: flex; 
+            align-items: center; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+          }
+          .balance-icon { font-size: 3em; margin-right: 20px; }
+          .balance-info { flex: 1; }
+          .balance-title { font-size: 1.1em; opacity: 0.9; margin-bottom: 5px; }
+          .balance-amount { font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }
+          .balance-rub { font-size: 1.2em; opacity: 0.8; }
           .sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
           .section { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
           .section h3 { margin-top: 0; color: #333; }
@@ -170,6 +195,17 @@ router.get('/', requireAdmin, async (req, res) => {
               <div class="stat-number">${stats.orders}</div>
               <div class="stat-label">Заказы</div>
             </button>
+          </div>
+
+          <div class="balance-summary">
+            <div class="balance-card">
+              <div class="balance-icon">💰</div>
+              <div class="balance-info">
+                <div class="balance-title">Общий баланс системы</div>
+                <div class="balance-amount">${stats.totalBalance.toFixed(2)} PZ</div>
+                <div class="balance-rub">${(stats.totalBalance * 100).toFixed(2)} ₽</div>
+              </div>
+            </div>
           </div>
 
           <div class="sections">
@@ -933,6 +969,9 @@ router.get('/users', requireAdmin, async (req, res) => {
   try {
     console.log('👥 Admin users page accessed');
     const users = await prisma.user.findMany({
+      include: {
+        partner: true // Include partner profile with balance
+      },
       orderBy: { createdAt: 'desc' },
       take: 50 // Limit to last 50 users
     });
@@ -1000,7 +1039,7 @@ router.get('/users', requireAdmin, async (req, res) => {
         </div>
         
         <table>
-          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Чей реферал</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
+          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Баланс</th><th>Чей реферал</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
     `;
 
     // Get referral information for all users
@@ -1071,12 +1110,18 @@ router.get('/users', requireAdmin, async (req, res) => {
       const indent = '&nbsp;'.repeat(item.level * 4);
       const levelIcon = item.level === 0 ? '👑' : item.level === 1 ? '👤' : item.level === 2 ? '👥' : '👶';
       
+      const userBalance = user.partner ? user.partner.balance : 0;
+      const balanceDisplay = userBalance > 0 ? `${userBalance.toFixed(2)} PZ` : '0.00 PZ';
+      
       let html = `
         <tr class="hierarchy-level-${item.level}" style="background-color: ${item.level % 2 === 0 ? '#f9f9f9' : '#ffffff'};">
           <td>${indent}<span class="level-icon">${levelIcon}</span> ${user.id.slice(0, 8)}...</td>
           <td>${user.telegramId}</td>
           <td>${user.firstName || 'Не указано'}</td>
           <td>${user.username ? '@' + user.username : 'Не указано'}</td>
+          <td style="text-align: center; font-weight: bold; color: ${userBalance > 0 ? '#28a745' : '#6c757d'};">
+            ${balanceDisplay}
+          </td>
           <td>
             ${inviterInfo}
             <div style="margin-top: 5px;">
