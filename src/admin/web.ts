@@ -1208,6 +1208,8 @@ router.get('/partners', requireAdmin, async (req, res) => {
 // Partners hierarchy route
 router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
   try {
+    const userId = req.query.user as string;
+    
     // Get all partners with their referrals
     const partners = await prisma.partnerProfile.findMany({
       include: {
@@ -1246,49 +1248,71 @@ router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
       })
     );
 
-    // Build hierarchy tree
-    function buildHierarchyTree() {
+    // Build interactive hierarchy
+    function buildInteractiveHierarchy() {
       const rootPartners = partnersWithInviters.filter(p => !p.inviter);
-      const hierarchyHtml: string[] = [];
-
+      
       function buildPartnerNode(partner: any, level = 0) {
-        const indent = '  '.repeat(level);
         const levelEmoji = level === 0 ? '👑' : level === 1 ? '🥈' : level === 2 ? '🥉' : '📋';
         const partnerName = `${partner.user.firstName || ''} ${partner.user.lastName || ''}`.trim();
         const username = partner.user.username ? ` (@${partner.user.username})` : '';
         const balance = partner.balance.toFixed(2);
+        
         // Count unique referrals (avoid duplicates)
         const uniqueReferrals = new Set(partner.referrals.map((r: any) => r.referredId).filter(Boolean));
         const referrals = uniqueReferrals.size;
         
-        let node = `${indent}${levelEmoji} ${partnerName}${username} - ${balance} PZ (${referrals} рефералов)\n`;
-        
-        // Add referrals
+        // Get direct referrals
         const directReferrals = partnersWithInviters.filter(p => 
           p.inviter && p.inviter.id === partner.user.id
         );
         
+        const hasChildren = directReferrals.length > 0;
+        const expandId = `expand-${partner.id}`;
+        const childrenId = `children-${partner.id}`;
+        
+        let node = `
+          <div class="partner-node level-${level}" style="margin-left: ${level * 20}px;">
+            <div class="partner-header" onclick="${hasChildren ? `toggleChildren('${expandId}', '${childrenId}')` : ''}" style="cursor: ${hasChildren ? 'pointer' : 'default'};">
+              <span class="expand-icon" id="${expandId}" style="display: ${hasChildren ? 'inline-block' : 'none'};">▶</span>
+              <span class="partner-info">
+                <span class="level-emoji">${levelEmoji}</span>
+                <span class="partner-name">${partnerName}${username}</span>
+                <span class="balance">${balance} PZ</span>
+                <span class="referrals">(${referrals} рефералов)</span>
+              </span>
+            </div>
+            <div class="children" id="${childrenId}" style="display: none;">
+        `;
+        
+        // Add child nodes
         directReferrals.forEach(referral => {
           node += buildPartnerNode(referral, level + 1);
         });
         
+        node += `
+            </div>
+          </div>
+        `;
+        
         return node;
       }
 
+      let html = '';
       rootPartners.forEach(rootPartner => {
-        hierarchyHtml.push(buildPartnerNode(rootPartner));
+        html += buildPartnerNode(rootPartner);
       });
 
-      return hierarchyHtml.join('\n');
+      return html;
     }
 
-    const hierarchyTree = buildHierarchyTree();
+    const hierarchyHtml = buildInteractiveHierarchy();
 
     res.send(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Иерархия партнёров</title>
+        <title>Интерактивная иерархия партнёров</title>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
@@ -1297,18 +1321,51 @@ router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
           h2 { color: #333; margin-bottom: 20px; }
           .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
           .btn:hover { background: #0056b3; }
-          .hierarchy-tree { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; white-space: pre-line; font-family: 'Courier New', monospace; font-size: 14px; line-height: 1.6; border: 1px solid #e9ecef; }
+          
           .stats { background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-around; text-align: center; }
           .stat-item h4 { margin: 0; color: #1976d2; }
           .stat-item p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; }
+          
+          .hierarchy-container { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-top: 20px; border: 1px solid #e9ecef; }
+          
+          .partner-node { margin: 5px 0; }
+          .partner-header { padding: 10px; border-radius: 6px; transition: background-color 0.2s; }
+          .partner-header:hover { background: #e9ecef; }
+          
+          .expand-icon { margin-right: 8px; font-size: 12px; transition: transform 0.2s; }
+          .expand-icon.expanded { transform: rotate(90deg); }
+          
+          .partner-info { display: flex; align-items: center; gap: 10px; }
+          .level-emoji { font-size: 16px; }
+          .partner-name { font-weight: 600; color: #333; }
+          .balance { color: #28a745; font-weight: bold; }
+          .referrals { color: #6c757d; font-size: 14px; }
+          
+          .children { margin-left: 20px; border-left: 2px solid #dee2e6; padding-left: 15px; }
+          
+          .level-0 .partner-header { background: #fff3cd; border-left: 4px solid #ffc107; }
+          .level-1 .partner-header { background: #d1ecf1; border-left: 4px solid #17a2b8; }
+          .level-2 .partner-header { background: #f8d7da; border-left: 4px solid #dc3545; }
+          .level-3 .partner-header { background: #e2e3e5; border-left: 4px solid #6c757d; }
+          
+          .controls { margin-bottom: 20px; }
+          .control-btn { background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-right: 10px; }
+          .control-btn:hover { background: #5a6268; }
+          .control-btn.primary { background: #007bff; }
+          .control-btn.primary:hover { background: #0056b3; }
         </style>
       </head>
       <body>
         <div class="container">
-          <h2>🌳 Иерархия партнёров v2.0</h2>
-          <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
-          <a href="/admin/partners" class="btn">← К партнёрам</a>
-          <a href="/admin" class="btn">🏠 Главная</a>
+          <h2>🌳 Интерактивная иерархия партнёров v3.0</h2>
+          <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 3.0 | ${new Date().toLocaleString()}</p>
+          
+          <div class="controls">
+            <a href="/admin/partners" class="btn">← К партнёрам</a>
+            <a href="/admin" class="btn">🏠 Главная</a>
+            <button class="control-btn" onclick="expandAll()">🔽 Развернуть всё</button>
+            <button class="control-btn" onclick="collapseAll()">🔼 Свернуть всё</button>
+          </div>
           
           <div class="stats">
             <div class="stat-item">
@@ -1325,21 +1382,65 @@ router.get('/partners-hierarchy', requireAdmin, async (req, res) => {
             </div>
           </div>
           
-          <div class="hierarchy-tree">
+          <div class="hierarchy-container">
             <h3>🌳 Дерево партнёрской иерархии:</h3>
-            ${hierarchyTree || 'Партнёрская иерархия пуста'}
+            <div class="hierarchy-tree">
+              ${hierarchyHtml || '<p style="text-align: center; color: #6c757d;">Партнёрская иерархия пуста</p>'}
+            </div>
           </div>
           
           <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
             <h4 style="margin: 0 0 10px 0; color: #856404;">📋 Обозначения:</h4>
             <p style="margin: 0; color: #856404;">
-              👑 Корневые партнёры (без пригласителя)<br>
+              👑 Корневые партнёры (без пригласителя) - нажмите для раскрытия<br>
               🥈 Партнёры 1-го уровня<br>
               🥉 Партнёры 2-го уровня<br>
-              📋 Партнёры 3-го уровня и ниже
+              📋 Партнёры 3-го уровня и ниже<br>
+              ▶ Нажмите на стрелку для раскрытия/скрытия уровней
             </p>
           </div>
         </div>
+        
+        <script>
+          function toggleChildren(expandId, childrenId) {
+            const expandIcon = document.getElementById(expandId);
+            const children = document.getElementById(childrenId);
+            
+            if (children.style.display === 'none') {
+              children.style.display = 'block';
+              expandIcon.classList.add('expanded');
+            } else {
+              children.style.display = 'none';
+              expandIcon.classList.remove('expanded');
+            }
+          }
+          
+          function expandAll() {
+            const allExpandIcons = document.querySelectorAll('.expand-icon');
+            const allChildren = document.querySelectorAll('.children');
+            
+            allExpandIcons.forEach(icon => {
+              icon.classList.add('expanded');
+            });
+            
+            allChildren.forEach(children => {
+              children.style.display = 'block';
+            });
+          }
+          
+          function collapseAll() {
+            const allExpandIcons = document.querySelectorAll('.expand-icon');
+            const allChildren = document.querySelectorAll('.children');
+            
+            allExpandIcons.forEach(icon => {
+              icon.classList.remove('expanded');
+            });
+            
+            allChildren.forEach(children => {
+              children.style.display = 'none';
+            });
+          }
+        </script>
       </body>
       </html>
     `);
