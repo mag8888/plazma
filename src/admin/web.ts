@@ -427,7 +427,7 @@ router.post('/products/:id/upload-image', requireAdmin, upload.single('image'), 
       cloudinary.uploader.upload_stream(
         {
           folder: 'plazma-bot/products',
-          transformation: [{ width: 800, height: 600, crop: 'fill', quality: 'auto' }],
+          transformation: [{ width: 800, height: 800, crop: 'fill', quality: 'auto' }],
         },
         (error, result) => {
           if (error) {
@@ -600,7 +600,7 @@ router.post('/products', requireAdmin, upload.single('image'), async (req, res) 
           cloudinary.uploader.upload_stream(
             {
               folder: 'plazma-bot/products',
-              transformation: [{ width: 800, height: 600, crop: 'fill', quality: 'auto' }],
+              transformation: [{ width: 800, height: 800, crop: 'fill', quality: 'auto' }],
             },
             (error, result) => {
               if (error) {
@@ -899,10 +899,10 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-actions .image-btn { background: #10b981; color: #064e3b; }
           .product-actions .image-btn:hover { background: #059669; }
           .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
-          img.product-image { width: 100%; height: 160px; object-fit: cover; border-radius: 10px; }
+          img.product-image { width: 100%; height: 200px; object-fit: cover; border-radius: 10px; }
           .product-image-placeholder { 
             width: 100%; 
-            height: 160px; 
+            height: 200px; 
             border: 2px dashed #d1d5db; 
             border-radius: 10px; 
             display: flex; 
