@@ -74,8 +74,9 @@ async function sendProductCards(ctx: Context, categoryId: string) {
     // Show category header
     await ctx.reply(`📂 ${category.name}\n\nТовары в категории:`);
 
-    // Send products in a grid layout
-    for (const product of products) {
+    // Send products in a grid layout with delay between each product
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
       console.log(`🛍️ Product: ${product.title}, ImageUrl: ${product.imageUrl}`);
       
       const buttons = [];
@@ -96,6 +97,12 @@ async function sendProductCards(ctx: Context, categoryId: string) {
       } else {
         console.log(`🛍️ Sending product without image (no imageUrl)`);
         await ctx.reply(message, Markup.inlineKeyboard([buttons]));
+      }
+      
+      // Add 1 second delay between products (except for the last one)
+      if (i < products.length - 1) {
+        console.log(`🛍️ Waiting 1 second before next product...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
