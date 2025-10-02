@@ -101,7 +101,22 @@ router.get('/', requireAdmin, async (req, res) => {
           .container { max-width: 1200px; margin: 0 auto; }
           .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
           .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
-          .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+          .stat-card { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            text-align: center; 
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+          }
+          .stat-card:hover { 
+            background: #f8f9fa; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+          }
           .stat-number { font-size: 2em; font-weight: bold; color: #007bff; }
           .stat-label { color: #666; margin-top: 5px; }
           .sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
@@ -127,30 +142,30 @@ router.get('/', requireAdmin, async (req, res) => {
           </div>
 
           <div class="stats">
-            <div class="stat-card">
+            <button class="stat-card" onclick="openAdminPage('/admin/users')">
               <div class="stat-number">${stats.users}</div>
               <div class="stat-label">Пользователи</div>
-            </div>
-            <div class="stat-card">
+            </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/categories')">
               <div class="stat-number">${stats.categories}</div>
               <div class="stat-label">Категории</div>
-            </div>
-            <div class="stat-card">
+            </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/products')">
               <div class="stat-number">${stats.products}</div>
               <div class="stat-label">Товары</div>
-            </div>
-            <div class="stat-card">
+            </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/partners')">
               <div class="stat-number">${stats.partners}</div>
               <div class="stat-label">Партнёры</div>
-            </div>
-            <div class="stat-card">
+            </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/reviews')">
               <div class="stat-number">${stats.reviews}</div>
               <div class="stat-label">Отзывы</div>
-            </div>
-            <div class="stat-card">
+            </button>
+            <button class="stat-card" onclick="openAdminPage('/admin/orders')">
               <div class="stat-number">${stats.orders}</div>
               <div class="stat-label">Заказы</div>
-            </div>
+            </button>
           </div>
 
           <div class="sections">
@@ -588,6 +603,61 @@ router.get('/test', (req, res) => {
 });
 
 // Individual admin pages
+router.get('/users', requireAdmin, async (req, res) => {
+  try {
+    console.log('👥 Admin users page accessed');
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50 // Limit to last 50 users
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Управление пользователями</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
+          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+          th { background-color: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>👥 Управление пользователями</h2>
+        <a href="/admin" class="btn">← Назад</a>
+        <table>
+          <tr><th>ID</th><th>Имя</th><th>Username</th><th>Зарегистрирован</th><th>Активность</th></tr>
+    `;
+
+    users.forEach(user => {
+      html += `
+        <tr>
+          <td>${user.id.slice(0, 8)}...</td>
+          <td>${user.firstName || 'Не указано'}</td>
+          <td>${user.username || 'Не указано'}</td>
+          <td>${new Date(user.createdAt).toLocaleDateString()}</td>
+          <td>${user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Нет данных'}</td>
+        </tr>
+      `;
+    });
+
+    html += `
+        </table>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Users page error:', error);
+    res.status(500).send('Ошибка загрузки пользователей');
+  }
+});
+
 router.get('/categories', requireAdmin, async (req, res) => {
   try {
     console.log('📁 Admin categories page accessed');
