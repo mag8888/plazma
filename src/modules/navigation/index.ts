@@ -54,8 +54,16 @@ const navigationItems: NavigationItem[] = [
     description: 'Каталог продукции и сезонные наборы',
     badgeKey: 'shop',
     handler: async (ctx) => {
-      const { showRegionSelection } = await import('../shop/index.js');
-      await showRegionSelection(ctx);
+      const { showRegionSelection, showCategories } = await import('../shop/index.js');
+      const user = await ensureUser(ctx);
+      
+      if (user && (user as any).selectedRegion) {
+        // User already has a region selected, show categories directly
+        await showCategories(ctx, (user as any).selectedRegion);
+      } else {
+        // User needs to select region first
+        await showRegionSelection(ctx);
+      }
     },
   },
   {

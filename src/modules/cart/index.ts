@@ -1,7 +1,7 @@
 import { Markup, Telegraf } from 'telegraf';
 import { BotModule } from '../../bot/types.js';
 import { Context } from '../../bot/context.js';
-import { logUserAction } from '../../services/user-history.js';
+import { logUserAction, ensureUser } from '../../services/user-history.js';
 import { getCartItems, cartItemsToText, clearCart, increaseProductQuantity, decreaseProductQuantity, removeProductFromCart } from '../../services/cart-service.js';
 
 export const cartModule: BotModule = {
@@ -17,14 +17,17 @@ export const cartModule: BotModule = {
 export async function showCart(ctx: Context) {
   try {
     console.log('🛍️ Cart: Starting showCart function');
-    const userId = ctx.from?.id?.toString();
-    console.log('🛍️ Cart: User ID:', userId);
     
-    if (!userId) {
-      console.log('🛍️ Cart: No user ID found');
-      await ctx.reply('❌ Ошибка: не удалось определить пользователя');
+    // Get user from database to ensure we have the correct user ID format
+    const user = await ensureUser(ctx);
+    if (!user) {
+      console.log('🛍️ Cart: Failed to ensure user');
+      await ctx.reply('❌ Ошибка загрузки корзины. Попробуйте позже.');
       return;
     }
+    
+    const userId = user.id;
+    console.log('🛍️ Cart: User ID:', userId);
 
     console.log('🛍️ Cart: Getting cart items for user:', userId);
     const cartItems = await getCartItems(userId);
@@ -144,11 +147,12 @@ export function registerCartActions(bot: Telegraf<Context>) {
     await ctx.answerCbQuery();
     await logUserAction(ctx, 'cart:clear');
     
-    const userId = ctx.from?.id?.toString();
-    if (!userId) {
-      await ctx.reply('❌ Ошибка: не удалось определить пользователя');
+    const user = await ensureUser(ctx);
+    if (!user) {
+      await ctx.reply('❌ Ошибка загрузки корзины. Попробуйте позже.');
       return;
     }
+    const userId = user.id;
 
     await clearCart(userId);
     await ctx.reply('🗑️ Корзина очищена');
@@ -159,11 +163,12 @@ export function registerCartActions(bot: Telegraf<Context>) {
     await ctx.answerCbQuery();
     await logUserAction(ctx, 'cart:checkout');
     
-    const userId = ctx.from?.id?.toString();
-    if (!userId) {
-      await ctx.reply('❌ Ошибка: не удалось определить пользователя');
+    const user = await ensureUser(ctx);
+    if (!user) {
+      await ctx.reply('❌ Ошибка загрузки корзины. Попробуйте позже.');
       return;
     }
+    const userId = user.id;
 
     try {
       const cartItems = await getCartItems(userId);
@@ -197,12 +202,13 @@ export function registerCartActions(bot: Telegraf<Context>) {
     
     const match = ctx.match as RegExpExecArray;
     const productId = match[1];
-    const userId = ctx.from?.id?.toString();
     
-    if (!userId) {
-      await ctx.reply('❌ Ошибка: не удалось определить пользователя');
+    const user = await ensureUser(ctx);
+    if (!user) {
+      await ctx.reply('❌ Ошибка загрузки корзины. Попробуйте позже.');
       return;
     }
+    const userId = user.id;
 
     try {
       await increaseProductQuantity(userId, productId);
@@ -222,12 +228,13 @@ export function registerCartActions(bot: Telegraf<Context>) {
     
     const match = ctx.match as RegExpExecArray;
     const productId = match[1];
-    const userId = ctx.from?.id?.toString();
     
-    if (!userId) {
-      await ctx.reply('❌ Ошибка: не удалось определить пользователя');
+    const user = await ensureUser(ctx);
+    if (!user) {
+      await ctx.reply('❌ Ошибка загрузки корзины. Попробуйте позже.');
       return;
     }
+    const userId = user.id;
 
     try {
       await decreaseProductQuantity(userId, productId);
@@ -247,12 +254,13 @@ export function registerCartActions(bot: Telegraf<Context>) {
     
     const match = ctx.match as RegExpExecArray;
     const productId = match[1];
-    const userId = ctx.from?.id?.toString();
     
-    if (!userId) {
-      await ctx.reply('❌ Ошибка: не удалось определить пользователя');
+    const user = await ensureUser(ctx);
+    if (!user) {
+      await ctx.reply('❌ Ошибка загрузки корзины. Попробуйте позже.');
       return;
     }
+    const userId = user.id;
 
     try {
       await removeProductFromCart(userId, productId);
