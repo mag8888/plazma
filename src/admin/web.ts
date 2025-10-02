@@ -394,6 +394,52 @@ router.post('/products/:id/toggle-active', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle product image upload
+router.post('/products/:id/upload-image', requireAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      return res.redirect('/admin?error=product_not_found');
+    }
+
+    if (!req.file) {
+      return res.redirect('/admin?error=no_image');
+    }
+
+    console.log('Uploading product image to Cloudinary...');
+    const result = await new Promise<any>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: 'plazma-bot/products',
+          transformation: [{ width: 800, height: 600, crop: 'fill', quality: 'auto' }],
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        },
+      ).end(req.file!.buffer);
+    });
+
+    const imageUrl = result.secure_url;
+    console.log('Product image uploaded:', imageUrl);
+
+    await prisma.product.update({
+      where: { id },
+      data: { imageUrl }
+    });
+
+    res.redirect('/admin/products?success=image_updated');
+  } catch (error) {
+    console.error('Product image upload error:', error);
+    res.redirect('/admin/products?error=image_upload');
+  }
+});
+
 // Handle product deletion
 router.post('/products/:id/delete', requireAdmin, async (req, res) => {
   try {
@@ -833,6 +879,8 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-actions .toggle-btn:hover { background: #f59e0b; }
           .product-actions .delete-btn { background: #f87171; color: #7f1d1d; }
           .product-actions .delete-btn:hover { background: #ef4444; }
+          .product-actions .image-btn { background: #10b981; color: #064e3b; }
+          .product-actions .image-btn:hover { background: #059669; }
           .empty-state { text-align: center; padding: 60px 20px; color: #6b7280; background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
           img.product-image { width: 100%; height: 160px; object-fit: cover; border-radius: 10px; }
         </style>
@@ -899,6 +947,10 @@ router.get('/products', requireAdmin, async (req, res) => {
             <div class="product-actions">
               <form method="post" action="/admin/products/${product.id}/toggle-active">
                 <button type="submit" class="toggle-btn">${product.isActive ? 'Отключить' : 'Включить'}</button>
+              </form>
+              <form method="post" action="/admin/products/${product.id}/upload-image" enctype="multipart/form-data" style="display: inline;">
+                <input type="file" name="image" accept="image/*" style="display: none;" id="image-${product.id}" onchange="this.form.submit()">
+                <button type="button" class="image-btn" onclick="document.getElementById('image-${product.id}').click()">📷 ${product.imageUrl ? 'Изменить фото' : 'Добавить фото'}</button>
               </form>
               <form method="post" action="/admin/products/${product.id}/delete" onsubmit="return confirm('Удалить товар «${product.title}»?')">
                 <button type="submit" class="delete-btn">Удалить</button>
