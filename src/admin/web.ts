@@ -255,14 +255,14 @@ router.get('/', requireAdmin, async (req, res) => {
                 </div>
                 <div class="form-group">
                   <label>Регионы доступности:</label>
-                  <div style="margin-top: 10px;">
-                    <label style="display: flex; align-items: center; margin-bottom: 10px;">
-                      <input type="checkbox" name="availableInRussia" checked style="margin-right: 8px;">
-                      🇷🇺 Россия
+                  <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="availableInRussia" checked>
+                      <span>🇷🇺 Россия</span>
                     </label>
-                    <label style="display: flex; align-items: center;">
-                      <input type="checkbox" name="availableInBali" checked style="margin-right: 8px;">
-                      🇮🇩 Бали
+                    <label style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="availableInBali" checked>
+                      <span>🇮🇩 Бали</span>
                     </label>
                   </div>
                 </div>
