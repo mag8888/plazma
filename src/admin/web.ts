@@ -1777,6 +1777,7 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <form method="post" action="/admin/recalculate-all-balances" style="display: inline;">
           <button type="submit" class="btn" style="background: #ffc107; color: #000;" onclick="return confirm('🔄 Пересчитать ВСЕ балансы партнёров?')">🔄 Пересчитать все балансы</button>
         </form>
+        <a href="/admin/debug-partners" class="btn" style="background: #6c757d;">🔍 Отладка партнёров</a>
         
         <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
           <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
@@ -2711,6 +2712,115 @@ router.post('/recalculate-all-balances', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Full balance recalculation error:', error);
     res.redirect('/admin/partners?error=balance_recalculation_failed');
+  }
+});
+
+// Debug partners page
+router.get('/debug-partners', requireAdmin, async (req, res) => {
+  try {
+    const partners = await prisma.partnerProfile.findMany({
+      include: {
+        user: true,
+        referrals: true,
+        transactions: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>🔍 Отладка партнёров</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+          .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .partner-card { border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 8px; background: #f9f9f9; }
+          .partner-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+          .partner-name { font-weight: bold; font-size: 16px; }
+          .partner-id { color: #666; font-size: 12px; }
+          .stats { display: flex; gap: 20px; margin: 10px 0; }
+          .stat { background: #e3f2fd; padding: 8px 12px; border-radius: 4px; }
+          .referrals { margin-top: 10px; }
+          .referral { background: #f0f0f0; padding: 8px; margin: 5px 0; border-radius: 4px; font-size: 14px; }
+          .transactions { margin-top: 10px; }
+          .transaction { background: #fff3cd; padding: 6px; margin: 3px 0; border-radius: 4px; font-size: 13px; }
+          .btn { background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 5px; }
+          .btn:hover { background: #0056b3; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>🔍 Отладка партнёров</h1>
+          <a href="/admin/partners" class="btn">← Назад к партнёрам</a>
+          <p>Всего партнёров: ${partners.length}</p>
+    `;
+
+    for (const partner of partners) {
+      const totalBalance = Number(partner.balance) + Number(partner.bonus);
+      const referralsCount = partner.referrals.length;
+      const directReferrals = partner.referrals.filter(r => r.level === 1).length;
+      const multiReferrals = partner.referrals.filter(r => r.level === 2).length;
+      
+      html += `
+        <div class="partner-card">
+          <div class="partner-header">
+            <div>
+              <div class="partner-name">${partner.user.firstName} ${partner.user.lastName || ''}</div>
+              <div class="partner-id">ID: ${partner.id} | User: ${partner.userId}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 18px; font-weight: bold; color: #28a745;">${totalBalance.toFixed(2)} PZ</div>
+              <div style="font-size: 12px; color: #666;">Баланс + Бонусы</div>
+            </div>
+          </div>
+          
+          <div class="stats">
+            <div class="stat">💰 Баланс: ${Number(partner.balance).toFixed(2)} PZ</div>
+            <div class="stat">🎁 Бонусы: ${Number(partner.bonus).toFixed(2)} PZ</div>
+            <div class="stat">👥 Всего рефералов: ${referralsCount}</div>
+            <div class="stat">📊 Прямых: ${directReferrals}</div>
+            <div class="stat">🌐 Мульти: ${multiReferrals}</div>
+          </div>
+          
+          ${referralsCount > 0 ? `
+            <div class="referrals">
+              <h4>👥 Рефералы:</h4>
+              ${partner.referrals.map((ref: any) => `
+                <div class="referral">
+                  Реферал ID: ${ref.referredId || 'N/A'} 
+                  (Уровень ${ref.level}, Контакт: ${ref.contact || 'N/A'})
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+          
+          ${partner.transactions.length > 0 ? `
+            <div class="transactions">
+              <h4>💰 Последние транзакции:</h4>
+              ${partner.transactions.slice(0, 5).map((tx: any) => `
+                <div class="transaction">
+                  ${tx.type === 'CREDIT' ? '+' : '-'}${Number(tx.amount).toFixed(2)} PZ — ${tx.description}
+                  <span style="color: #666; font-size: 11px;">(${new Date(tx.createdAt).toLocaleString()})</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    html += `
+        </div>
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+  } catch (error) {
+    console.error('Debug partners error:', error);
+    res.send('❌ Ошибка отладки партнёров: ' + (error instanceof Error ? error.message : String(error)));
   }
 });
 
