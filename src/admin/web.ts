@@ -921,16 +921,32 @@ router.get('/users', requireAdmin, async (req, res) => {
           .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         </style>
         <table>
-          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
+          <tr><th>ID</th><th>Telegram ID</th><th>Имя</th><th>Username</th><th>Чей реферал</th><th>Зарегистрирован</th><th>Активность</th><th>Действия</th></tr>
     `;
 
+    // Get referral information for all users
+    const referrals = await prisma.partnerReferral.findMany({
+      include: {
+        profile: {
+          include: {
+            user: true
+          }
+        }
+      }
+    });
+
     users.forEach(user => {
+      // Find who invited this user
+      const referral = referrals.find(r => r.referredId === user.id);
+      const inviterInfo = referral ? `${referral.profile.user.firstName || 'Не указано'} (@${referral.profile.user.username || referral.profile.user.telegramId})` : 'Нет пригласителя';
+      
       html += `
         <tr>
           <td>${user.id.slice(0, 8)}...</td>
           <td>${user.telegramId}</td>
           <td>${user.firstName || 'Не указано'}</td>
           <td>${user.username ? '@' + user.username : 'Не указано'}</td>
+          <td>${inviterInfo}</td>
           <td>${new Date(user.createdAt).toLocaleDateString()}</td>
           <td>${user.updatedAt ? new Date(user.updatedAt).toLocaleDateString() : 'Нет данных'}</td>
           <td>
