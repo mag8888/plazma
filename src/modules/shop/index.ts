@@ -158,7 +158,6 @@ async function handleBuy(ctx: Context, productId: string) {
 
   const cartItems = await getCartItems(user.id);
   const summaryText = cartItemsToText(cartItems);
-  const adminChatId = env.adminChatId;
 
   const lines = [
     '🛒 Запрос на покупку',
@@ -199,9 +198,9 @@ async function handleBuy(ctx: Context, productId: string) {
 
   await logUserAction(ctx, 'shop:buy', { productId });
 
-  if (adminChatId) {
-    await ctx.telegram.sendMessage(adminChatId, `${message}\n\nЗдравствуйте, хочу приобрести товар…`);
-  }
+  // Send order to all admins
+  const { sendToAllAdmins } = await import('../../config/env.js');
+  await sendToAllAdmins(ctx, `${message}\n\nЗдравствуйте, хочу приобрести товар…`);
 
   await ctx.answerCbQuery();
   await ctx.reply('Заявка отправлена администратору. Мы свяжемся с вами в ближайшее время!');

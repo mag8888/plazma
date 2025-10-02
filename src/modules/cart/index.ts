@@ -176,11 +176,9 @@ export function registerCartActions(bot: Telegraf<Context>) {
       const cartText = cartItemsToText(cartItems);
       const orderText = `🛍️ Новый заказ от ${ctx.from?.first_name || 'Пользователь'}\n\n${cartText}\n\n📞 Свяжитесь с покупателем: @${ctx.from?.username || 'нет username'}`;
 
-      // Send order to admin
-      const { env } = await import('../../config/env.js');
-      if (env.adminChatId) {
-        await ctx.telegram.sendMessage(env.adminChatId, orderText);
-      }
+      // Send order to all admins
+      const { sendToAllAdmins } = await import('../../config/env.js');
+      await sendToAllAdmins(ctx, orderText);
       
       // Clear cart after successful order
       await clearCart(userId);

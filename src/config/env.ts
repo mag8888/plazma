@@ -18,3 +18,23 @@ export const env = {
   adminPassword: requireEnv('ADMIN_PASSWORD'),
   publicBaseUrl: requireEnv('PUBLIC_BASE_URL'),
 };
+
+// Helper function to get all admin chat IDs
+export function getAdminChatIds(): string[] {
+  if (!env.adminChatId) return [];
+  return env.adminChatId.split(',').map(id => id.trim()).filter(id => id);
+}
+
+// Helper function to send message to all admins
+export async function sendToAllAdmins(bot: any, message: string): Promise<void> {
+  const adminIds = getAdminChatIds();
+  
+  for (const chatId of adminIds) {
+    try {
+      await bot.telegram.sendMessage(chatId, message);
+      console.log(`Message sent to admin: ${chatId}`);
+    } catch (error) {
+      console.error(`Failed to send message to admin ${chatId}:`, error);
+    }
+  }
+}
