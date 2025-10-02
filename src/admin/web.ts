@@ -486,10 +486,14 @@ router.get('/', requireAdmin, async (req, res) => {
           .product-section-subtitle { font-size: 13px; color: #6c757d; }
           .product-grid { display: grid; gap: 18px; }
           .product-grid.two-columns { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-          .product-grid.media-layout { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: stretch; }
+          .product-grid.three-columns { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+          @media (min-width: 900px) {
+            .product-grid.three-columns { grid-template-columns: repeat(3, 1fr); }
+          }
+          .product-grid.media-layout { grid-template-columns: repeat(2, 1fr); align-items: stretch; }
           .product-form textarea { resize: vertical; }
-          #productShortDescription { min-height: 100px; }
-          #productFullDescription { min-height: 160px; }
+          #productShortDescription { min-height: 220px; }
+          #productFullDescription { min-height: 220px; }
           .category-picker { display: flex; gap: 12px; }
           .category-picker select { flex: 1; }
           .category-picker .btn { padding: 8px 14px; border-radius: 8px; }
@@ -499,8 +503,8 @@ router.get('/', requireAdmin, async (req, res) => {
           .switch-row input { transform: scale(1.2); }
           .char-count { text-align: right; font-size: 12px; color: #6c757d; margin-top: 5px; }
           .file-info { font-size: 12px; color: #6c757d; }
-          .product-media { display: grid; grid-template-columns: 150px 1fr; gap: 16px; align-items: center; }
-          .image-preview { width: 150px; height: 150px; border-radius: 12px; background: #f1f3f5 center/cover no-repeat; border: 1px solid #dee2e6; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6); }
+          .product-media { display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: center; }
+          .image-preview { width: 220px; height: 220px; border-radius: 12px; background: #f1f3f5 center/cover no-repeat; border: 1px solid #dee2e6; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6); }
           .image-controls { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
           .image-controls input[type="file"] { cursor: pointer; }
           .image-controls .file-info { margin-top: 4px; }
@@ -740,10 +744,14 @@ router.get('/', requireAdmin, async (req, res) => {
                   <span class="product-section-title">Основные параметры</span>
                   <span class="product-section-subtitle">Название, стоимость и наличие товара</span>
                 </div>
-                <div class="product-grid two-columns">
+                <div class="product-grid three-columns">
                   <div class="form-group">
                     <label>Название товара *</label>
                     <input type="text" id="productName" required placeholder="Введите название товара">
+                  </div>
+                  <div class="form-group">
+                    <label>Цена (₽) *</label>
+                    <input type="number" id="productPriceRub" step="1" min="0" required placeholder="0">
                   </div>
                   <div class="form-group">
                     <label>Цена (PZ) *</label>
