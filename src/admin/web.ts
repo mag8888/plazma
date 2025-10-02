@@ -1501,6 +1501,9 @@ router.get('/partners', requireAdmin, async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
+    // Calculate total balance of all partners
+    const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
+
     let html = `
       <!DOCTYPE html>
       <html>
@@ -1520,6 +1523,10 @@ router.get('/partners', requireAdmin, async (req, res) => {
         <h2>👥 Управление партнёрами v2.0</h2>
         <p style="color: #666; font-size: 12px; margin: 5px 0;">Версия: 2.0 | ${new Date().toLocaleString()}</p>
         <a href="/admin" class="btn">← Назад</a>
+        
+        <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
+          <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${totalBalance.toFixed(2)} PZ</h3>
+        </div>
         
         ${req.query.success === 'inviter_changed' ? '<div class="alert alert-success">✅ Пригласитель успешно изменен</div>' : ''}
         ${req.query.error === 'inviter_not_found' ? '<div class="alert alert-error">❌ Пригласитель с таким кодом не найден</div>' : ''}
