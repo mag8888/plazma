@@ -28,8 +28,9 @@ const introDetails = `✨ Plazma Water — это источник энерги�
 
 export function mainKeyboard() {
   return Markup.keyboard([
-    ['🛒 Магазин', '💰 Партнёрка'],
-    ['⭐ Отзывы', 'ℹ️ О нас'],
+    ['🛒 Магазин', '🛍️ Корзина'],
+    ['💰 Партнёрка', '⭐ Отзывы'],
+    ['ℹ️ О нас'],
   ]).resize();
 }
 
@@ -182,5 +183,6 @@ export const navigationModule: BotModule = {
       // This will be handled by partner module
       await ctx.reply('Переходим в партнёрскую программу...');
     });
+
   },
 };

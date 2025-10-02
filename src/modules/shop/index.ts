@@ -13,7 +13,7 @@ const PRODUCT_MORE_PREFIX = 'shop:prod:more:';
 const PRODUCT_CART_PREFIX = 'shop:prod:cart:';
 const PRODUCT_BUY_PREFIX = 'shop:prod:buy:';
 
-async function showCategories(ctx: Context) {
+export async function showCategories(ctx: Context) {
   await logUserAction(ctx, 'shop:open');
   
   try {

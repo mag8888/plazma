@@ -51,6 +51,10 @@ async function bootstrap() {
 
     bot.use(telegrafSession<SessionData, Context>({ defaultSession: (): SessionData => ({}) }));
     await applyBotModules(bot);
+    
+    // Register cart actions
+    const { registerCartActions } = await import('./modules/cart/index.js');
+    registerCartActions(bot);
 
     console.log('Starting bot in long polling mode...');
     
