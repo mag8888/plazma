@@ -1,7 +1,7 @@
 import { Telegraf, Markup } from 'telegraf';
 import { Context } from '../../bot/context.js';
 import { BotModule } from '../../bot/types.js';
-import { logUserAction } from '../../services/user-history.js';
+import { logUserAction, ensureUser } from '../../services/user-history.js';
 import { createPartnerReferral, recordPartnerTransaction } from '../../services/partner-service.js';
 
 const greeting = `👋 Добро пожаловать!
@@ -65,25 +65,38 @@ export const navigationModule: BotModule = {
           console.log('🔗 Referral: Found partner profile:', partnerProfile ? 'YES' : 'NO');
           
           if (partnerProfile) {
-            // Create referral record
-            await createPartnerReferral(partnerProfile.id, 1, ctx.from?.id?.toString());
+            // Ensure user exists first
+            const user = await ensureUser(ctx);
+            if (!user) {
+              console.log('🔗 Referral: Failed to ensure user');
+              await ctx.reply('❌ Ошибка при регистрации пользователя.');
+              return;
+            }
+            
+            console.log('🔗 Referral: User ensured, creating referral record');
+            // Create referral record using user ID (ObjectId)
+            await createPartnerReferral(partnerProfile.id, 1, user.id);
             
             // Award 3PZ to the inviter
+            console.log('🔗 Referral: Awarding 3PZ bonus to inviter');
             await recordPartnerTransaction(
               partnerProfile.id, 
               3, 
               'Бонус за приглашение друга', 
               'CREDIT'
             );
+            console.log('🔗 Referral: Bonus awarded successfully');
             
             // Send notification to inviter
             try {
+              console.log('🔗 Referral: Sending notification to inviter:', partnerProfile.user.telegramId);
               await ctx.telegram.sendMessage(
                 partnerProfile.user.telegramId,
                 '🎉 Ваш счет пополнен на 3PZ, приглашайте больше друзей и получайте продукцию за бонусы!'
               );
+              console.log('🔗 Referral: Notification sent successfully');
             } catch (error) {
-              console.warn('Failed to send notification to inviter:', error);
+              console.warn('🔗 Referral: Failed to send notification to inviter:', error);
             }
             
             const programText = programType === 'DIRECT' 
@@ -94,12 +107,16 @@ export const navigationModule: BotModule = {
 • Ваш бонус 10%
 • Бонус ${programType === 'DIRECT' ? '25%' : '15%+5%+5%'} начнет действовать при Вашей активности 200PZ в месяц`;
               
+          console.log('🔗 Referral: Sending welcome message with bonus info');
           await ctx.reply(`🎉 Добро пожаловать! Вы перешли по ссылке от ${partnerProfile.user.firstName || 'партнёра'} в ${programText}!${bonusText}`);
+          console.log('🔗 Referral: Welcome message sent');
+          
           await logUserAction(ctx, 'partner:referral_joined', {
             referralCode,
             partnerId: partnerProfile.id,
             programType
           });
+          console.log('🔗 Referral: User action logged');
         } else {
           console.log('🔗 Referral: Partner profile not found for code:', referralCode);
           await ctx.reply('❌ Реферальная ссылка недействительна. Партнёр не найден.');
