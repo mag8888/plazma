@@ -752,10 +752,12 @@ router.get('/', requireAdmin, async (req, res) => {
                   <div class="form-group">
                     <label>Цена (₽) *</label>
                     <input type="number" id="productPriceRub" step="1" min="0" required placeholder="0">
+                    <div class="char-count">1 PZ = 100 ₽</div>
                   </div>
                   <div class="form-group">
                     <label>Цена (PZ) *</label>
                     <input type="number" id="productPrice" step="0.01" min="0" required placeholder="0.00">
+                    <div class="char-count">1 PZ = 100 ₽</div>
                   </div>
                   <div class="form-group">
                     <label>Категория *</label>
