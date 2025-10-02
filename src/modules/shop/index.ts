@@ -29,6 +29,12 @@ export async function showRegionSelection(ctx: Context) {
 }
 
 export async function showCategories(ctx: Context, region?: string) {
+  // If region not provided, try to get it from user
+  if (!region) {
+    const user = await ensureUser(ctx);
+    region = (user as any)?.selectedRegion || 'RUSSIA';
+  }
+  
   await logUserAction(ctx, 'shop:open', { region });
   
   try {
@@ -248,7 +254,15 @@ export const shopModule: BotModule = {
     console.log('🛍️ Registering shop module...');
     bot.hears(['Магазин', 'Каталог', '🛒 Магазин'], async (ctx) => {
       console.log('🛍️ Shop button pressed by user:', ctx.from?.id);
-      await showRegionSelection(ctx);
+      
+      const user = await ensureUser(ctx);
+      if (user && (user as any).selectedRegion) {
+        // User already has a region selected, show categories directly
+        await showCategories(ctx, (user as any).selectedRegion);
+      } else {
+        // User needs to select region first
+        await showRegionSelection(ctx);
+      }
     });
 
     // Handle region selection

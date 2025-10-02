@@ -128,9 +128,16 @@ export function registerCartActions(bot: Telegraf<Context>) {
     await ctx.answerCbQuery();
     await logUserAction(ctx, 'cart:go_to_shop');
     
-    // Import shop module dynamically to avoid circular dependency
-    const { showCategories } = await import('../shop/index.js');
-    await showCategories(ctx);
+    const user = await ensureUser(ctx);
+    if (user && (user as any).selectedRegion) {
+      // User has region selected, show categories directly
+      const { showCategories } = await import('../shop/index.js');
+      await showCategories(ctx, (user as any).selectedRegion);
+    } else {
+      // User needs to select region first
+      const { showRegionSelection } = await import('../shop/index.js');
+      await showRegionSelection(ctx);
+    }
   });
 
   // Continue shopping
@@ -138,8 +145,16 @@ export function registerCartActions(bot: Telegraf<Context>) {
     await ctx.answerCbQuery();
     await logUserAction(ctx, 'cart:continue_shopping');
     
-    const { showCategories } = await import('../shop/index.js');
-    await showCategories(ctx);
+    const user = await ensureUser(ctx);
+    if (user && (user as any).selectedRegion) {
+      // User has region selected, show categories directly
+      const { showCategories } = await import('../shop/index.js');
+      await showCategories(ctx, (user as any).selectedRegion);
+    } else {
+      // User needs to select region first
+      const { showRegionSelection } = await import('../shop/index.js');
+      await showRegionSelection(ctx);
+    }
   });
 
   // Clear cart
