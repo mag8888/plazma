@@ -83,6 +83,7 @@ async function showDashboard(ctx: Context) {
     return;
   }
 
+  console.log('💳 Dashboard: Getting dashboard for user:', user.id);
   const dashboard = await getPartnerDashboard(user.id);
   if (!dashboard) {
     await ctx.reply('Вы ещё не активировали партнёрскую программу. Выберите формат участия.');
@@ -90,6 +91,9 @@ async function showDashboard(ctx: Context) {
   }
 
   const { profile, stats } = dashboard;
+  console.log('💳 Dashboard: Profile balance:', profile.balance);
+  console.log('💳 Dashboard: Profile bonus:', profile.bonus);
+  console.log('💳 Dashboard: Transactions count:', profile.transactions.length);
   const transactions = profile.transactions.map((tx) => {
     const sign = tx.type === 'CREDIT' ? '+' : '-';
     const amount = Number(tx.amount).toFixed(2);

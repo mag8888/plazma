@@ -81,12 +81,15 @@ router.post('/login', (req, res) => {
 router.get('/', requireAdmin, async (req, res) => {
   try {
     // Get total balance from all partners
+    console.log('📊 Admin: Getting total balance from all partners');
     const totalBalanceResult = await prisma.partnerProfile.aggregate({
       _sum: {
         balance: true
       }
     });
     const totalBalance = totalBalanceResult._sum.balance || 0;
+    console.log('📊 Admin: Total balance result:', totalBalanceResult);
+    console.log('📊 Admin: Total balance:', totalBalance);
 
     const stats = {
       categories: await prisma.category.count(),
@@ -968,12 +971,17 @@ router.get('/partners-network', requireAdmin, async (req, res) => {
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     console.log('👥 Admin users page accessed');
+    console.log('👥 Admin users: Fetching users with partner profiles');
     const users = await prisma.user.findMany({
       include: {
         partner: true // Include partner profile with balance
       },
       orderBy: { createdAt: 'desc' },
       take: 50 // Limit to last 50 users
+    });
+    console.log('👥 Admin users: Found users:', users.length);
+    users.forEach(user => {
+      console.log(`👥 Admin users: User ${user.firstName} (${user.telegramId}) - Partner balance: ${user.partner?.balance || 0}`);
     });
 
     let html = `

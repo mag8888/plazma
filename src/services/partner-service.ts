@@ -72,6 +72,12 @@ export async function getPartnerDashboard(userId: string) {
 }
 
 export async function recordPartnerTransaction(profileId: string, amount: number, description: string, type: TransactionType = 'CREDIT') {
+  console.log('💰 Transaction: Starting recordPartnerTransaction');
+  console.log('💰 Transaction: profileId:', profileId);
+  console.log('💰 Transaction: amount:', amount);
+  console.log('💰 Transaction: description:', description);
+  console.log('💰 Transaction: type:', type);
+
   // First, create the transaction record
   const transaction = await prisma.partnerTransaction.create({
     data: {
@@ -81,10 +87,20 @@ export async function recordPartnerTransaction(profileId: string, amount: number
       type,
     },
   });
+  console.log('💰 Transaction: Transaction record created:', transaction.id);
+
+  // Get current balance before update
+  const currentProfile = await prisma.partnerProfile.findUnique({
+    where: { id: profileId },
+    select: { balance: true }
+  });
+  console.log('💰 Transaction: Current balance:', currentProfile?.balance);
 
   // Then, update the partner's balance
   const balanceUpdate = type === 'CREDIT' ? amount : -amount;
-  await prisma.partnerProfile.update({
+  console.log('💰 Transaction: Balance update amount:', balanceUpdate);
+  
+  const updatedProfile = await prisma.partnerProfile.update({
     where: { id: profileId },
     data: {
       balance: {
@@ -92,6 +108,7 @@ export async function recordPartnerTransaction(profileId: string, amount: number
       }
     }
   });
+  console.log('💰 Transaction: New balance after update:', updatedProfile.balance);
 
   return transaction;
 }
