@@ -517,6 +517,69 @@ router.post('/reviews/:id/toggle-pinned', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle review image upload
+router.post('/reviews/:id/upload-image', requireAdmin, upload.single('image'), async (req, res) => {
+  try {
+    console.log('🖼️ Review image upload request received');
+    const { id } = req.params;
+    console.log('🖼️ Review ID:', id);
+    
+    const review = await prisma.review.findUnique({ where: { id } });
+    
+    if (!review) {
+      console.log('🖼️ Review not found:', id);
+      return res.redirect('/admin/reviews?error=review_not_found');
+    }
+
+    console.log('🖼️ Review found:', review.name);
+    console.log('🖼️ Request file:', req.file ? 'present' : 'missing');
+    
+    if (!req.file) {
+      console.log('🖼️ No file uploaded');
+      return res.redirect('/admin/reviews?error=no_image');
+    }
+
+    console.log('🖼️ File details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+
+    console.log('🖼️ Uploading to Cloudinary...');
+    const result = await new Promise<any>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: 'plazma-bot/reviews',
+          transformation: [{ width: 800, height: 800, crop: 'fill', quality: 'auto' }],
+        },
+        (error, result) => {
+          if (error) {
+            console.error('🖼️ Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            console.log('🖼️ Cloudinary upload success:', result?.secure_url);
+            resolve(result);
+          }
+        },
+      ).end(req.file!.buffer);
+    });
+
+    const imageUrl = result.secure_url;
+    console.log('🖼️ Final image URL:', imageUrl);
+
+    const updatedReview = await prisma.review.update({
+      where: { id },
+      data: { photoUrl: imageUrl }
+    });
+
+    console.log('🖼️ Database updated, review photoUrl:', updatedReview.photoUrl);
+    res.redirect('/admin/reviews?success=image_updated');
+  } catch (error) {
+    console.error('🖼️ Review image upload error:', error);
+    res.redirect('/admin/reviews?error=image_upload');
+  }
+});
+
 // Handle review deletion
 router.post('/reviews/:id/delete', requireAdmin, async (req, res) => {
   try {
@@ -1050,35 +1113,110 @@ router.get('/reviews', requireAdmin, async (req, res) => {
         <title>Управление отзывами</title>
         <meta charset="utf-8">
         <style>
-          body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px; }
-          .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px; margin: 5px; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .btn { display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 6px; margin-bottom: 20px; }
           .btn:hover { background: #0056b3; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-          th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-          th { background-color: #f2f2f2; }
+          .review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; margin-top: 20px; }
+          .review-card { background: #fff; border-radius: 12px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); padding: 18px; display: flex; flex-direction: column; gap: 12px; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+          .review-card:hover { transform: translateY(-4px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12); }
+          .review-header { display: flex; justify-content: space-between; align-items: flex-start; }
+          .review-name { font-size: 18px; font-weight: 600; color: #111827; margin: 0; }
+          .review-badges { display: flex; gap: 8px; }
+          .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; display: inline-block; }
+          .badge-pinned { background: #fef3c7; color: #92400e; }
+          .badge-not-pinned { background: #f3f4f6; color: #374151; }
+          .review-content { color: #4b5563; font-size: 14px; line-height: 1.5; margin: 0; }
+          .review-meta { font-size: 12px; color: #6b7280; display: flex; justify-content: space-between; }
+          .review-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+          .review-actions form { margin: 0; }
+          .review-actions button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+          .review-actions .toggle-btn { background: #fbbf24; color: #92400e; }
+          .review-actions .toggle-btn:hover { background: #f59e0b; }
+          .review-actions .image-btn { background: #10b981; color: #064e3b; }
+          .review-actions .image-btn:hover { background: #059669; }
+          .review-actions .delete-btn { background: #f87171; color: #7f1d1d; }
+          .review-actions .delete-btn:hover { background: #ef4444; }
+          .status-btn { transition: all 0.2s ease; }
+          .status-btn:hover { transform: scale(1.1); }
+          .status-btn.active { color: #28a745; }
+          .status-btn.inactive { color: #dc3545; }
+          img.review-image { width: 100%; height: 200px; object-fit: cover; border-radius: 10px; }
+          .review-image-placeholder { 
+            width: 100%; 
+            height: 200px; 
+            border: 2px dashed #d1d5db; 
+            border-radius: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            background: #f9fafb; 
+            color: #6b7280; 
+          }
+          .placeholder-icon { font-size: 32px; margin-bottom: 8px; }
+          .placeholder-text { font-size: 14px; font-weight: 500; }
+          .alert { padding: 12px 16px; margin: 16px 0; border-radius: 8px; font-weight: 500; }
+          .alert-success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+          .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
         </style>
       </head>
       <body>
         <h2>⭐ Управление отзывами</h2>
         <a href="/admin" class="btn">← Назад</a>
-        <table>
-          <tr><th>Имя</th><th>Статус</th><th>Закреплён</th><th>Текст</th><th>Создан</th></tr>
+        
+        ${req.query.success === 'image_updated' ? '<div class="alert alert-success">✅ Фото успешно обновлено!</div>' : ''}
+        ${req.query.error === 'no_image' ? '<div class="alert alert-error">❌ Файл не выбран</div>' : ''}
+        ${req.query.error === 'image_upload' ? '<div class="alert alert-error">❌ Ошибка загрузки фото</div>' : ''}
+        ${req.query.error === 'review_not_found' ? '<div class="alert alert-error">❌ Отзыв не найден</div>' : ''}
+        
+        <div class="review-grid">
     `;
 
     reviews.forEach(review => {
+      const imageSection = review.photoUrl
+        ? `<img src="${review.photoUrl}" alt="${review.name}" class="review-image" loading="lazy">`
+        : `<div class="review-image-placeholder">
+             <span class="placeholder-icon">👤</span>
+             <span class="placeholder-text">Нет фото</span>
+           </div>`;
+
       html += `
-        <tr>
-          <td>${review.name}</td>
-          <td>${review.isActive ? '✅ Активен' : '❌ Неактивен'}</td>
-          <td>${review.isPinned ? '📌 Да' : '❌ Нет'}</td>
-          <td>${review.content.substring(0, 100)}${review.content.length > 100 ? '...' : ''}</td>
-          <td>${new Date(review.createdAt).toLocaleDateString()}</td>
-        </tr>
+        <div class="review-card">
+          ${imageSection}
+          <div class="review-header">
+            <h3 class="review-name">${review.name}</h3>
+            <form method="post" action="/admin/reviews/${review.id}/toggle-active" style="display: inline;">
+              <button type="submit" class="status-btn ${review.isActive ? 'active' : 'inactive'}" style="border: none; background: none; cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 4px;">
+                ${review.isActive ? '✅ Активен' : '❌ Неактивен'}
+              </button>
+            </form>
+          </div>
+          <div class="review-badges">
+            <span class="badge ${review.isPinned ? 'badge-pinned' : 'badge-not-pinned'}">${review.isPinned ? '📌 Закреплён' : '❌ Не закреплён'}</span>
+          </div>
+          <p class="review-content">${review.content}</p>
+          <div class="review-meta">
+            <span>Создан: ${new Date(review.createdAt).toLocaleDateString()}</span>
+            <span>ID: ${review.id.slice(0, 8)}...</span>
+          </div>
+          <div class="review-actions">
+            <form method="post" action="/admin/reviews/${review.id}/toggle-pinned">
+              <button type="submit" class="toggle-btn">${review.isPinned ? 'Открепить' : 'Закрепить'}</button>
+            </form>
+            <form method="post" action="/admin/reviews/${review.id}/upload-image" enctype="multipart/form-data" style="display: inline;">
+              <input type="file" name="image" accept="image/*" style="display: none;" id="review-image-${review.id}" onchange="this.form.submit()">
+              <button type="button" class="image-btn" onclick="document.getElementById('review-image-${review.id}').click()">📷 ${review.photoUrl ? 'Изменить фото' : 'Добавить фото'}</button>
+            </form>
+            <form method="post" action="/admin/reviews/${review.id}/delete" onsubmit="return confirm('Удалить отзыв от «${review.name}»?')">
+              <button type="submit" class="delete-btn">Удалить</button>
+            </form>
+          </div>
+        </div>
       `;
     });
 
     html += `
-        </table>
+        </div>
       </body>
       </html>
     `;
