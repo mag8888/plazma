@@ -67,6 +67,7 @@ model Product {
   description      String?
   imageUrl         String?
   price            Float
+  stock            Int        @default(999)
   isActive         Boolean     @default(true)
   availableInRussia Boolean   @default(true)
   availableInBali  Boolean    @default(true)
