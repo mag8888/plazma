@@ -18,12 +18,9 @@ async function ensureReferralCode(): Promise<string> {
   }
 }
 
-export async function getOrCreatePartnerProfile(userId: string, programType: PartnerProgramType) {
+export async function getOrCreatePartnerProfile(userId: string, programType: PartnerProgramType = 'DIRECT') {
   const existing = await prisma.partnerProfile.findUnique({ where: { userId } });
   if (existing) {
-    if (existing.programType !== programType) {
-      return prisma.partnerProfile.update({ where: { id: existing.id }, data: { programType } });
-    }
     return existing;
   }
 
@@ -33,8 +30,48 @@ export async function getOrCreatePartnerProfile(userId: string, programType: Par
       userId,
       programType,
       referralCode,
+      isActive: false, // По умолчанию неактивен
     },
   });
+}
+
+export async function activatePartnerProfile(userId: string, activationType: 'PURCHASE' | 'ADMIN', months: number = 1) {
+  const profile = await prisma.partnerProfile.findUnique({ where: { userId } });
+  if (!profile) {
+    throw new Error('Partner profile not found');
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + months * 30 * 24 * 60 * 60 * 1000); // Добавляем месяцы
+
+  return prisma.partnerProfile.update({
+    where: { userId },
+    data: {
+      isActive: true,
+      activatedAt: now,
+      expiresAt,
+      activationType,
+    },
+  });
+}
+
+export async function checkPartnerActivation(userId: string): Promise<boolean> {
+  const profile = await prisma.partnerProfile.findUnique({ where: { userId } });
+  if (!profile) return false;
+
+  // Проверяем, активен ли профиль и не истек ли срок
+  if (!profile.isActive) return false;
+  
+  if (profile.expiresAt && new Date() > profile.expiresAt) {
+    // Автоматически деактивируем истекший профиль
+    await prisma.partnerProfile.update({
+      where: { userId },
+      data: { isActive: false }
+    });
+    return false;
+  }
+
+  return true;
 }
 
 export function buildReferralLink(code: string, programType: 'DIRECT' | 'MULTI_LEVEL') {
@@ -233,6 +270,95 @@ export async function recalculatePartnerBonuses(profileId: string) {
   console.log(`✅ Updated profile ${profileId}: balance = ${updatedProfile.balance} PZ, bonus = ${updatedProfile.bonus} PZ`);
   console.log(`✅ Updated user ${updatedProfile.userId}: balance = ${totalBonus} PZ`);
   return totalBonus;
+}
+
+// Новая функция для расчета бонусов по двойной системе
+export async function calculateDualSystemBonuses(orderUserId: string, orderAmount: number) {
+  console.log(`🎯 Calculating dual system bonuses for order ${orderAmount} PZ by user ${orderUserId}`);
+  
+  // Находим всех партнеров, которые могут получить бонусы
+  const partnerReferrals = await prisma.partnerReferral.findMany({
+    where: { referredId: orderUserId },
+    include: {
+      profile: {
+        include: { user: true }
+      }
+    },
+    orderBy: { level: 'asc' }
+  });
+
+  if (partnerReferrals.length === 0) {
+    console.log(`❌ No partner referrals found for user ${orderUserId}`);
+    return;
+  }
+
+  const bonuses = [];
+
+  for (const referral of partnerReferrals) {
+    const partnerProfile = referral.profile;
+    
+    // Проверяем, активен ли партнерский профиль
+    const isActive = await checkPartnerActivation(partnerProfile.userId);
+    if (!isActive) {
+      console.log(`⚠️ Partner ${partnerProfile.userId} is not active, skipping bonus`);
+      continue;
+    }
+
+    let bonusAmount = 0;
+    let description = '';
+
+    if (referral.level === 1) {
+      // Прямой реферал: 25% + 15% = 40%
+      bonusAmount = orderAmount * 0.40;
+      description = `Бонус за заказ прямого реферала (${orderAmount} PZ) - двойная система`;
+    } else if (referral.level === 2) {
+      // Уровень 2: 5%
+      bonusAmount = orderAmount * 0.05;
+      description = `Бонус за заказ реферала 2-го уровня (${orderAmount} PZ)`;
+    } else if (referral.level === 3) {
+      // Уровень 3: 5%
+      bonusAmount = orderAmount * 0.05;
+      description = `Бонус за заказ реферала 3-го уровня (${orderAmount} PZ)`;
+    }
+
+    if (bonusAmount > 0) {
+      // Добавляем бонус партнеру
+      await recordPartnerTransaction(
+        partnerProfile.id,
+        bonusAmount,
+        description,
+        'CREDIT'
+      );
+
+      // Добавляем запись в историю пользователя
+      await prisma.userHistory.create({
+        data: {
+          userId: partnerProfile.userId,
+          action: 'REFERRAL_BONUS',
+          payload: {
+            amount: bonusAmount,
+            orderAmount,
+            level: referral.level,
+            referredUserId: orderUserId,
+            type: 'DUAL_SYSTEM'
+          }
+        }
+      });
+
+      bonuses.push({
+        partnerId: partnerProfile.userId,
+        partnerName: partnerProfile.user.firstName || 'Партнер',
+        level: referral.level,
+        amount: bonusAmount,
+        description
+      });
+
+      console.log(`✅ Added ${bonusAmount} PZ bonus to partner ${partnerProfile.userId} (level ${referral.level})`);
+    }
+  }
+
+  console.log(`🎉 Total bonuses distributed: ${bonuses.length} partners, ${bonuses.reduce((sum, b) => sum + b.amount, 0)} PZ`);
+  return bonuses;
 }
 
 export async function createPartnerReferral(profileId: string, level: number, referredId?: string, contact?: string) {

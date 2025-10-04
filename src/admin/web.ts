@@ -3,7 +3,7 @@ import multer from 'multer';
 import session from 'express-session';
 import { v2 as cloudinary } from 'cloudinary';
 import { prisma } from '../lib/prisma.js';
-import { recalculatePartnerBonuses } from '../services/partner-service.js';
+import { recalculatePartnerBonuses, activatePartnerProfile, checkPartnerActivation, calculateDualSystemBonuses } from '../services/partner-service.js';
 import { ordersModule } from './orders-module.js';
 
 // Configure Cloudinary
@@ -5099,6 +5099,10 @@ function getStatusDisplayName(status: string) {
         where: { userId }
       });
       console.log(`🤝 Partner profile found:`, partnerProfile ? 'yes' : 'no');
+      
+      // Проверяем статус активации
+      const isActive = partnerProfile ? await checkPartnerActivation(userId) : false;
+      console.log(`🤝 Partner profile is active:`, isActive);
 
       console.log(`📊 Getting user history for user: ${userId}`);
       const userHistory = await prisma.userHistory.findMany({
@@ -5252,6 +5256,14 @@ function getStatusDisplayName(status: string) {
               <h2>🔄 Активация рефералки</h2>
               <div class="referral-activation">
                 <p><strong>Активировать реферальную программу для пользователя на срок:</strong></p>
+                <div style="background: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                  <p style="margin: 0; color: #2d5a2d; font-weight: bold;">🎯 Двойная система бонусов:</p>
+                  <ul style="margin: 10px 0; color: #2d5a2d;">
+                    <li><strong>Прямой реферал:</strong> 25% + 15% = <strong>40%</strong></li>
+                    <li><strong>2-й уровень:</strong> <strong>5%</strong></li>
+                    <li><strong>3-й уровень:</strong> <strong>5%</strong></li>
+                  </ul>
+                </div>
                 <form class="activation-form" method="post" action="/admin/users/${user.id}/activate-referral">
                   <div>
                     <label>Период:</label><br>
@@ -5263,10 +5275,9 @@ function getStatusDisplayName(status: string) {
                     </select>
                   </div>
                   <div>
-                    <label>Тип программы:</label><br>
+                    <label>Тип активации:</label><br>
                     <select name="programType" required>
-                      <option value="DIRECT">Прямая (25%)</option>
-                      <option value="MULTI_LEVEL">Многоуровневая (15%+5%+5%)</option>
+                      <option value="DUAL">Двойная система (25%+15%+5%+5%)</option>
                     </select>
                   </div>
                   <button type="submit" class="activation-btn">Активировать</button>
@@ -5303,8 +5314,18 @@ function getStatusDisplayName(status: string) {
               </div>
 
               <div id="partners" class="tab-content">
-                <h2>👥 Партнеры</h2>
-                <p style="text-align: center; color: #6c757d; padding: 40px;">Партнеры будут добавлены в следующей версии</p>
+                <h2>🤝 Партнерский профиль</h2>
+                <p><strong>Статус:</strong> ${isActive ? '🟢 Активен' : '🔴 Неактивен'}</p>
+                ${partnerProfile ? `
+                  <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Код реферала:</strong> ${partnerProfile.referralCode}</p>
+                    <p><strong>Тип программы:</strong> ${partnerProfile.programType}</p>
+                    <p><strong>Баланс:</strong> ${partnerProfile.balance || 0} PZ</p>
+                    ${partnerProfile.activatedAt ? `<p><strong>Активирован:</strong> ${partnerProfile.activatedAt.toLocaleString('ru-RU')}</p>` : ''}
+                    ${partnerProfile.expiresAt ? `<p><strong>Истекает:</strong> ${partnerProfile.expiresAt.toLocaleString('ru-RU')}</p>` : ''}
+                    <p><strong>Тип активации:</strong> ${partnerProfile.activationType || 'Не указан'}</p>
+                  </div>
+                ` : '<p>Партнерский профиль не создан</p>'}
               </div>
 
               <div id="orders" class="tab-content">
@@ -5409,17 +5430,14 @@ function getStatusDisplayName(status: string) {
         });
       }
 
-      // Add transaction to user history
-      await prisma.userHistory.create({
-        data: {
-          userId,
-          action: 'REFERRAL_ACTIVATED'
-        }
-      });
+      // Активируем партнерский профиль через админку
+      await activatePartnerProfile(userId, 'ADMIN', parseInt(months));
+
+      console.log(`✅ Referral program activated for user ${userId} for ${months} months`);
 
       res.redirect(`/admin/users/${userId}/card?success=referral_activated`);
     } catch (error) {
-      console.error('Error activating referral:', error);
+      console.error('❌ Error activating referral program:', error);
       res.status(500).send('Ошибка активации реферальной программы');
     }
   });
@@ -5818,9 +5836,21 @@ router.post('/orders/:orderId/pay', requireAdmin, async (req, res) => {
       });
     });
     
-    // Distribute referral bonuses after successful payment
+    // Check if this purchase qualifies for referral program activation (200 PZ)
+    if (totalAmount >= 200) {
+      try {
+        console.log(`🎯 Purchase of ${totalAmount} PZ qualifies for referral program activation`);
+        await activatePartnerProfile(order.user.id, 'PURCHASE', 1); // 1 month activation
+        console.log(`✅ Referral program activated for user ${order.user.id} via purchase`);
+      } catch (activationError) {
+        console.error('❌ Referral program activation error:', activationError);
+        // Don't fail the payment if activation fails
+      }
+    }
+
+    // Distribute referral bonuses after successful payment using dual system
     try {
-      await distributeReferralBonuses(order.user.id, totalAmount);
+      await calculateDualSystemBonuses(order.user.id, totalAmount);
     } catch (bonusError) {
       console.error('❌ Referral bonus distribution error:', bonusError);
       // Don't fail the payment if bonus distribution fails
