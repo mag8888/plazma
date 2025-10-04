@@ -4722,7 +4722,10 @@ router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
 
 // Helper functions for user orders page
 function createUserOrderCard(order: any) {
-  const items = JSON.parse((order.itemsJson as string) || '[]');
+  // Handle both string and object types for itemsJson
+  const items = typeof order.itemsJson === 'string' 
+    ? JSON.parse(order.itemsJson || '[]') 
+    : (order.itemsJson || []);
   const totalAmount = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
   
   return `
@@ -4951,6 +4954,6 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
 
 
 // Mount orders module
-router.use('/', ordersModule);
+// router.use('/', ordersModule);
 
 export { router as adminWebRouter };
