@@ -956,7 +956,7 @@ router.get('/', requireAdmin, async (req, res) => {
             document.querySelector('#productModalSubmit').textContent = 'Обновить товар';
             
             // Load categories
-            fetch('/admin/api/categories')
+            fetch('/admin/api/categories', { credentials: 'include' })
               .then(response => response.json())
               .then(categories => {
                 const select = document.getElementById('productCategory');
@@ -3187,7 +3187,7 @@ router.get('/products', requireAdmin, async (req, res) => {
             document.getElementById('editProductBali').checked = availableInBali;
             
             // Load categories
-            fetch('/admin/api/categories')
+            fetch('/admin/api/categories', { credentials: 'include' })
               .then(response => response.json())
               .then(categories => {
                 const select = document.getElementById('editProductCategory');
@@ -3248,7 +3248,8 @@ router.get('/products', requireAdmin, async (req, res) => {
               
               fetch(\`/admin/products/\${productId}/update\`, {
                 method: 'POST',
-                body: formDataToSend
+                body: formDataToSend,
+                credentials: 'include'
               })
               .then(response => response.json())
               .then(data => {
