@@ -16,7 +16,7 @@ export const env = {
   databaseUrl: requireEnv('DATABASE_URL'),
   adminEmail: requireEnv('ADMIN_EMAIL'),
   adminPassword: requireEnv('ADMIN_PASSWORD'),
-  publicBaseUrl: requireEnv('PUBLIC_BASE_URL'),
+  publicBaseUrl: process.env.PUBLIC_BASE_URL || 'http://localhost:3000',
 };
 
 // Helper function to get all admin chat IDs

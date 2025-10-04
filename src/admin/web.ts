@@ -2787,21 +2787,65 @@ router.get('/products', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle product toggle active status
+router.post('/products/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      return res.redirect('/admin?error=product_not_found');
+    }
+
+    await prisma.product.update({
+      where: { id },
+      data: { isActive: !product.isActive }
+    });
+
+    res.redirect('/admin?success=product_updated');
+  } catch (error) {
+    console.error('Product toggle error:', error);
+    res.redirect('/admin?error=product_toggle');
+  }
+});
+
 // Update product
-router.post('/products/:productId/update', requireAdmin, express.json(), async (req, res) => {
+router.post('/products/:productId/update', requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const { productId } = req.params;
-    const { title, price, summary, description, isActive } = req.body as any;
+    const { title, price, summary, description, isActive, categoryId, stock, availableInRussia, availableInBali } = req.body as any;
+    
+    let imageUrl = undefined;
+    if (req.file) {
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { resource_type: 'auto', folder: 'plazma-bot/products' },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        ).end(req.file!.buffer);
+      });
+      imageUrl = (result as any).secure_url;
+    }
+
+    const updateData: any = {};
+    if (title) updateData.title = title.trim();
+    if (price) updateData.price = parseFloat(price);
+    if (summary) updateData.summary = summary.trim();
+    if (description) updateData.description = description.trim();
+    if (categoryId) updateData.categoryId = categoryId;
+    if (stock !== undefined) updateData.stock = parseInt(stock);
+    if (isActive !== undefined) updateData.isActive = isActive === 'true';
+    if (availableInRussia !== undefined) updateData.availableInRussia = availableInRussia === 'true';
+    if (availableInBali !== undefined) updateData.availableInBali = availableInBali === 'true';
+    if (imageUrl) updateData.imageUrl = imageUrl;
+
     const product = await prisma.product.update({
       where: { id: productId },
-      data: {
-        title: typeof title === 'string' ? title.trim() : undefined,
-        price: typeof price === 'number' ? price : undefined,
-        summary: typeof summary === 'string' ? summary : undefined,
-        description: typeof description === 'string' ? description : undefined,
-        isActive: typeof isActive === 'boolean' ? isActive : undefined,
-      },
+      data: updateData,
     });
+    
     res.json({ success: true, product });
   } catch (error) {
     console.error('Update product error:', error);
