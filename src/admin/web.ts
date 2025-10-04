@@ -2850,7 +2850,7 @@ router.get('/products', requireAdmin, async (req, res) => {
                     .then(response => response.json())
                     .then(categories => {
                       const select = document.getElementById('productCategory');
-                      select.innerHTML = '<option value=\"\">Выберите категорию</option>';
+                      select.innerHTML = '<option value="">Выберите категорию</option>';
                       categories.forEach(category => {
                         const option = document.createElement('option');
                         option.value = category.id;
