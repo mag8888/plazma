@@ -5086,6 +5086,22 @@ function getStatusDisplayName(status: string) {
         `);
       }
 
+      // Sync balance between User and PartnerProfile
+      const partnerProfile = await prisma.partnerProfile.findUnique({
+        where: { userId }
+      });
+      
+      if (partnerProfile && partnerProfile.balance !== user.balance) {
+        console.log(`🔄 Syncing balance: User=${user.balance} PZ, PartnerProfile=${partnerProfile.balance} PZ`);
+        // Use PartnerProfile balance as source of truth
+        await prisma.user.update({
+          where: { id: userId },
+          data: { balance: partnerProfile.balance }
+        });
+        user.balance = partnerProfile.balance;
+        console.log(`✅ Balance synced to ${user.balance} PZ`);
+      }
+
       // Get data separately to avoid complex queries
       console.log(`📦 Getting orders for user: ${userId}`);
       const orders = await prisma.orderRequest.findMany({
@@ -5094,10 +5110,6 @@ function getStatusDisplayName(status: string) {
       });
       console.log(`📦 Orders count:`, orders?.length || 0);
 
-      console.log(`🤝 Getting partner profile for user: ${userId}`);
-      const partnerProfile = await prisma.partnerProfile.findUnique({
-        where: { userId }
-      });
       console.log(`🤝 Partner profile found:`, partnerProfile ? 'yes' : 'no');
       
       // Проверяем статус активации
