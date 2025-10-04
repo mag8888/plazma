@@ -3235,10 +3235,16 @@ router.get('/products', requireAdmin, async (req, res) => {
               formDataToSend.append('categoryId', formData.get('categoryId') || '');
               formDataToSend.append('stock', formData.get('stock') || '999');
               
-              // Handle checkboxes properly
-              formDataToSend.append('isActive', document.getElementById('editProductStatus').checked ? 'true' : 'false');
-              formDataToSend.append('availableInRussia', document.getElementById('editProductRussia').checked ? 'true' : 'false');
-              formDataToSend.append('availableInBali', document.getElementById('editProductBali').checked ? 'true' : 'false');
+              // Handle checkboxes properly - only send if checked
+              if (document.getElementById('editProductStatus').checked) {
+                formDataToSend.append('isActive', 'true');
+              }
+              if (document.getElementById('editProductRussia').checked) {
+                formDataToSend.append('availableInRussia', 'true');
+              }
+              if (document.getElementById('editProductBali').checked) {
+                formDataToSend.append('availableInBali', 'true');
+              }
               
               fetch(\`/admin/products/\${productId}/update\`, {
                 method: 'POST',
