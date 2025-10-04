@@ -13,10 +13,7 @@ https://t.me/iplasmanano`;
 
 export const aboutModule: BotModule = {
   async register(bot: Telegraf<Context>) {
-        bot.hears([/о\s*нас/i, 'ℹ️ О нас'], async (ctx) => {
-      await logUserAction(ctx, 'menu:about');
-      await showAbout(ctx);
-    });
+    // Обработчик перенесен в navigation модуль
   },
 };
 

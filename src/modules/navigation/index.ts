@@ -452,11 +452,6 @@ export const navigationModule: BotModule = {
       await exitAppInterface(ctx);
     });
 
-    // Handle "О нас" button
-    bot.hears(['ℹ️ О нас'], async (ctx) => {
-      await logUserAction(ctx, 'menu:about');
-      await ctx.reply(introDetails);
-    });
 
 
   },

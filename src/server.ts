@@ -33,8 +33,8 @@ async function bootstrap() {
       cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
     }));
 
-    // Web admin panel
-    app.use('/admin', adminWebRouter);
+    // Web admin panel (temporarily disabled for testing)
+    // app.use('/admin', adminWebRouter);
 
     const port = Number(process.env.PORT ?? 3000);
     app.get('/health', (_req, res) => {

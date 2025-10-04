@@ -739,6 +739,7 @@ router.get('/', requireAdmin, async (req, res) => {
             </div>
             
             <form id="addProductForm" class="product-form">
+              <input type="hidden" id="productId" name="productId" value="">
               <div class="product-section">
                 <div class="product-section-header">
                   <span class="product-section-title">Основные параметры</span>
@@ -1090,6 +1091,10 @@ router.get('/', requireAdmin, async (req, res) => {
           
           // Product modal functions
           function openAddProductModal() {
+            // Reset form for new product
+            document.getElementById('productId').value = '';
+            document.querySelector('.product-modal h2').textContent = 'Добавить товар';
+            document.querySelector('#productModalSubmit').textContent = 'Создать товар';
             document.getElementById('addProductModal').style.display = 'block';
             loadCategories();
           }
@@ -1097,7 +1102,12 @@ router.get('/', requireAdmin, async (req, res) => {
           function closeAddProductModal() {
             document.getElementById('addProductModal').style.display = 'none';
             document.getElementById('addProductForm').reset();
+            document.getElementById('productId').value = '';
             document.getElementById('shortDescCount').textContent = '0/200';
+            
+            // Reset modal title and submit button
+            document.querySelector('.product-modal h2').textContent = '➕ Добавить новый товар';
+            document.querySelector('#productModalSubmit').textContent = 'Создать товар';
           }
           
           function openAddCategoryModal() {
@@ -1107,6 +1117,58 @@ router.get('/', requireAdmin, async (req, res) => {
           function closeAddCategoryModal() {
             document.getElementById('addCategoryModal').style.display = 'none';
             document.getElementById('addCategoryForm').reset();
+          }
+          
+          // Edit product using create modal
+          function editProductUsingCreateModal(button) {
+            const productId = button.dataset.id;
+            const title = button.dataset.title;
+            const summary = button.dataset.summary;
+            const description = button.dataset.description;
+            const price = button.dataset.price;
+            const categoryId = button.dataset.categoryId;
+            const isActive = button.dataset.active === 'true';
+            const availableInRussia = button.dataset.russia === 'true';
+            const availableInBali = button.dataset.bali === 'true';
+            const imageUrl = button.dataset.image;
+            
+            // Set hidden product ID field
+            document.getElementById('productId').value = productId;
+            
+            // Fill form fields
+            document.getElementById('productName').value = title;
+            document.getElementById('productShortDescription').value = summary;
+            document.getElementById('productFullDescription').value = description;
+            document.getElementById('productPrice').value = price;
+            document.getElementById('productPriceRub').value = (price * 100).toFixed(2);
+            document.getElementById('productStock').value = '999'; // Default stock
+            document.getElementById('productCategory').value = categoryId;
+            
+            // Set status toggle
+            document.getElementById('productStatus').checked = isActive;
+            
+            // Set region toggles
+            document.getElementById('productRussia').checked = availableInRussia;
+            document.getElementById('productBali').checked = availableInBali;
+            
+            // Set image preview
+            const imagePreview = document.getElementById('imagePreview');
+            if (imageUrl) {
+              imagePreview.src = imageUrl;
+              imagePreview.style.display = 'block';
+              imagePreview.nextElementSibling.style.display = 'none';
+            } else {
+              imagePreview.style.display = 'none';
+              imagePreview.nextElementSibling.style.display = 'flex';
+            }
+            
+            // Update modal title and submit button
+            document.querySelector('.product-modal h2').textContent = 'Редактировать товар';
+            document.querySelector('#productModalSubmit').textContent = 'Обновить товар';
+            
+            // Load categories and show modal
+            loadCategories();
+            document.getElementById('addProductModal').style.display = 'block';
           }
           
           // Load categories for product form
@@ -1133,20 +1195,21 @@ router.get('/', requireAdmin, async (req, res) => {
           document.getElementById('addProductForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            const productId = document.getElementById('productId').value;
+            const isEdit = productId !== '';
+            
             const formData = new FormData();
-            formData.append('name', document.getElementById('productName').value);
+            formData.append('title', document.getElementById('productName').value);
             formData.append('price', document.getElementById('productPrice').value);
             formData.append('categoryId', document.getElementById('productCategory').value);
             formData.append('stock', document.getElementById('productStock').value || 0);
-            formData.append('shortDescription', document.getElementById('productShortDescription').value);
-            formData.append('fullDescription', document.getElementById('productFullDescription').value);
-            formData.append('active', document.getElementById('productActive').checked);
+            formData.append('summary', document.getElementById('productShortDescription').value);
+            formData.append('description', document.getElementById('productFullDescription').value);
+            formData.append('isActive', document.getElementById('productStatus').checked);
             
             // Regions
-            var rrEl = document.getElementById('regionRussia');
-            var rbEl = document.getElementById('regionBali');
-            formData.append('availableInRussia', String(rrEl && rrEl['checked']));
-            formData.append('availableInBali', String(rbEl && rbEl['checked']));
+            formData.append('availableInRussia', document.getElementById('productRussia').checked);
+            formData.append('availableInBali', document.getElementById('productBali').checked);
             
             // Add image if selected
             const imageFile = document.getElementById('productImage').files[0];
@@ -1155,7 +1218,8 @@ router.get('/', requireAdmin, async (req, res) => {
             }
             
             try {
-              const response = await fetch('/admin/api/products', {
+              const url = isEdit ? \`/admin/products/\${productId}/update\` : '/admin/api/products';
+              const response = await fetch(url, {
                 method: 'POST',
                 body: formData
               });
@@ -1163,12 +1227,12 @@ router.get('/', requireAdmin, async (req, res) => {
               const result = await response.json();
               
               if (result.success) {
-                alert('✅ Товар успешно создан!');
+                alert(isEdit ? '✅ Товар успешно обновлен!' : '✅ Товар успешно создан!');
                 closeAddProductModal();
-                // Refresh the page to show new product
+                // Refresh the page to show changes
                 window.location.reload();
               } else {
-                alert('❌ Ошибка при создании товара: ' + result.error);
+                alert(\`❌ Ошибка при \${isEdit ? 'обновлении' : 'создании'} товара: \` + result.error);
               }
             } catch (error) {
               alert('❌ Ошибка: ' + error.message);
@@ -2553,9 +2617,9 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-summary { color: #4b5563; font-size: 14px; line-height: 1.5; margin: 0; }
           .product-price { font-size: 16px; font-weight: 600; color: #1f2937; }
           .product-meta { font-size: 12px; color: #6b7280; display: flex; justify-content: space-between; }
-          .product-actions { display: flex; gap: 10px; }
+          .product-actions { display: flex; flex-wrap: wrap; gap: 8px; }
           .product-actions form { margin: 0; }
-          .product-actions button { padding: 8px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+          .product-actions button { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap; }
           .product-actions .toggle-btn { background: #fbbf24; color: #92400e; }
           .product-actions .toggle-btn:hover { background: #f59e0b; }
           .product-actions .delete-btn { background: #f87171; color: #7f1d1d; }
@@ -2723,21 +2787,65 @@ router.get('/products', requireAdmin, async (req, res) => {
   }
 });
 
+// Handle product toggle active status
+router.post('/products/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await prisma.product.findUnique({ where: { id } });
+    
+    if (!product) {
+      return res.redirect('/admin?error=product_not_found');
+    }
+
+    await prisma.product.update({
+      where: { id },
+      data: { isActive: !product.isActive }
+    });
+
+    res.redirect('/admin?success=product_updated');
+  } catch (error) {
+    console.error('Product toggle error:', error);
+    res.redirect('/admin?error=product_toggle');
+  }
+});
+
 // Update product
-router.post('/products/:productId/update', requireAdmin, express.json(), async (req, res) => {
+router.post('/products/:productId/update', requireAdmin, upload.single('image'), async (req, res) => {
   try {
     const { productId } = req.params;
-    const { title, price, summary, description, isActive } = req.body as any;
+    const { title, price, summary, description, isActive, categoryId, stock, availableInRussia, availableInBali } = req.body as any;
+    
+    let imageUrl = undefined;
+    if (req.file) {
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { resource_type: 'auto', folder: 'plazma-bot/products' },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        ).end(req.file!.buffer);
+      });
+      imageUrl = (result as any).secure_url;
+    }
+
+    const updateData: any = {};
+    if (title) updateData.title = title.trim();
+    if (price) updateData.price = parseFloat(price);
+    if (summary) updateData.summary = summary.trim();
+    if (description) updateData.description = description.trim();
+    if (categoryId) updateData.categoryId = categoryId;
+    if (stock !== undefined) updateData.stock = parseInt(stock);
+    if (isActive !== undefined) updateData.isActive = isActive === 'true';
+    if (availableInRussia !== undefined) updateData.availableInRussia = availableInRussia === 'true';
+    if (availableInBali !== undefined) updateData.availableInBali = availableInBali === 'true';
+    if (imageUrl) updateData.imageUrl = imageUrl;
+
     const product = await prisma.product.update({
       where: { id: productId },
-      data: {
-        title: typeof title === 'string' ? title.trim() : undefined,
-        price: typeof price === 'number' ? price : undefined,
-        summary: typeof summary === 'string' ? summary : undefined,
-        description: typeof description === 'string' ? description : undefined,
-        isActive: typeof isActive === 'boolean' ? isActive : undefined,
-      },
+      data: updateData,
     });
+    
     res.json({ success: true, product });
   } catch (error) {
     console.error('Update product error:', error);
