@@ -4,6 +4,7 @@ import session from 'express-session';
 import { v2 as cloudinary } from 'cloudinary';
 import { prisma } from '../lib/prisma.js';
 import { recalculatePartnerBonuses } from '../services/partner-service.js';
+import { ordersModule } from './orders-module.js';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -4693,5 +4694,8 @@ router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
     res.json({ success: false, error: 'Ошибка обновления баланса' });
   }
 });
+
+// Mount orders module
+router.use('/', ordersModule);
 
 export { router as adminWebRouter };
