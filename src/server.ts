@@ -10,7 +10,6 @@ import { applyBotModules } from './bot/setup-modules.js';
 import { prisma } from './lib/prisma.js';
 import { ensureInitialData } from './lib/bootstrap.js';
 import { setupAdminPanel } from './admin/index.js';
-import { adminWebRouter } from './admin/web.js';
 import { setBotInstance } from './lib/bot-instance.js';
 
 async function bootstrap() {
@@ -33,8 +32,8 @@ async function bootstrap() {
       cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
     }));
 
-    // Web admin panel (temporarily disabled for testing)
-    // app.use('/admin', adminWebRouter);
+    // Setup AdminJS panel
+    await setupAdminPanel(app);
 
     const port = Number(process.env.PORT ?? 3000);
     app.get('/health', (_req, res) => {
