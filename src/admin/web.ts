@@ -4936,6 +4936,38 @@ function getStatusDisplayName(status: string) {
 }
 
 // Show user orders page
+  // Test route for debugging
+  router.get('/debug-user/:userId', requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      console.log(`🔍 DEBUG: Testing user ID: ${userId}`);
+      
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+      
+      console.log(`🔍 DEBUG: User found:`, user ? 'YES' : 'NO');
+      
+      res.json({
+        success: true,
+        userId,
+        userExists: !!user,
+        userData: user ? {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username
+        } : null
+      });
+    } catch (error) {
+      console.error('🔍 DEBUG Error:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Get user card with transaction history
   router.get('/users/:userId/card', requireAdmin, async (req, res) => {
     try {
