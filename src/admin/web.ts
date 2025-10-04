@@ -167,15 +167,40 @@ router.get('/', requireAdmin, async (req, res) => {
           
           const totalPartners = countAllReferrals(user.id);
           
-          const totalOrderSum = user.orders?.reduce((sum: number, order: any) => {
+          // Разделяем заказы по статусам
+          const ordersByStatus = {
+            new: user.orders?.filter((order: any) => order.status === 'NEW') || [],
+            processing: user.orders?.filter((order: any) => order.status === 'PROCESSING') || [],
+            completed: user.orders?.filter((order: any) => order.status === 'COMPLETED') || [],
+            cancelled: user.orders?.filter((order: any) => order.status === 'CANCELLED') || []
+          };
+          
+          // Сумма только оплаченных (завершенных) заказов
+          const paidOrderSum = ordersByStatus.completed.reduce((sum: number, order: any) => {
             try {
-              const items = JSON.parse(order.itemsJson || '[]');
+              const items = typeof order.itemsJson === 'string' 
+                ? JSON.parse(order.itemsJson || '[]')
+                : (order.itemsJson || []);
               const orderTotal = items.reduce((itemSum: number, item: any) => itemSum + (item.price || 0) * (item.quantity || 1), 0);
               return sum + orderTotal;
             } catch {
               return sum;
             }
-          }, 0) || 0;
+          }, 0);
+          
+          // Определяем приоритетный статус (новые заказы имеют приоритет)
+          const hasNewOrders = ordersByStatus.new.length > 0;
+          const hasProcessingOrders = ordersByStatus.processing.length > 0;
+          const hasCompletedOrders = ordersByStatus.completed.length > 0;
+          const hasCancelledOrders = ordersByStatus.cancelled.length > 0;
+          
+          let priorityStatus = 'none';
+          if (hasNewOrders) priorityStatus = 'new';
+          else if (hasProcessingOrders) priorityStatus = 'processing';
+          else if (hasCompletedOrders) priorityStatus = 'completed';
+          else if (hasCancelledOrders) priorityStatus = 'cancelled';
+          
+          const totalOrderSum = paidOrderSum; // Используем только оплаченные заказы
           const balance = user.balance || partnerProfile?.balance || 0;
           const bonus = partnerProfile?.bonus || 0;
           const lastActivity = user.updatedAt || user.createdAt;
@@ -187,7 +212,10 @@ router.get('/', requireAdmin, async (req, res) => {
             totalOrderSum,
             balance,
             bonus,
-            lastActivity
+            lastActivity,
+            ordersByStatus,
+            priorityStatus,
+            paidOrderSum
           };
         });
 
@@ -273,7 +301,13 @@ router.get('/', requireAdmin, async (req, res) => {
                       <td>
                         <button class="orders-sum-btn" onclick="showUserOrders('${user.id}', '${user.firstName || 'Пользователь'}')" style="background: none; border: none; cursor: pointer; padding: 0; width: 100%; text-align: left;">
                           <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
-                          <div class="orders-count ${(user.orders?.length || 0) > 0 ? 'has-orders' : 'no-orders'}">${user.orders?.length || 0} заказов</div>
+                          <div class="orders-count status-${user.priorityStatus}" data-status="${user.priorityStatus}">
+                            ${user.orders?.length || 0} заказов
+                            ${user.priorityStatus === 'new' ? ' 🔴' : ''}
+                            ${user.priorityStatus === 'processing' ? ' 🟡' : ''}
+                            ${user.priorityStatus === 'completed' ? ' 🟢' : ''}
+                            ${user.priorityStatus === 'cancelled' ? ' ⚫' : ''}
+                          </div>
                         </button>
                       </td>
                       <td>
@@ -510,16 +544,47 @@ router.get('/', requireAdmin, async (req, res) => {
             transition: all 0.2s ease;
           }
           
-          .orders-count.has-orders { 
-            color: #dc3545; 
-            font-weight: 600; 
-            background: #f8d7da; 
-            padding: 2px 6px; 
-            border-radius: 4px; 
-            display: inline-block; 
+          .orders-count {
+            padding: 3px 8px;
+            border-radius: 6px;
+            display: inline-block;
+            font-weight: 600;
+            font-size: 11px;
+            transition: all 0.2s ease;
           }
-          .orders-count.no-orders { 
-            color: #6c757d; 
+          
+          .orders-count.status-new {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+          }
+          
+          .orders-count.status-processing {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(255, 193, 7, 0.3);
+          }
+          
+          .orders-count.status-completed {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+          }
+          
+          .orders-count.status-cancelled {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+          }
+          
+          .orders-count.status-none {
+            color: #6c757d;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
           }
           
           /* Balance Modal Styles */
@@ -1662,16 +1727,41 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
     const usersWithStats = users.map((user: any) => {
       const partnerProfile = user.partner;
       const directPartners = partnerProfile?.referrals?.length || 0;
-      const totalOrderSum = user.orders?.reduce((sum: number, order: any) => {
-        // Parse itemsJson to calculate total
+      
+      // Разделяем заказы по статусам
+      const ordersByStatus = {
+        new: user.orders?.filter((order: any) => order.status === 'NEW') || [],
+        processing: user.orders?.filter((order: any) => order.status === 'PROCESSING') || [],
+        completed: user.orders?.filter((order: any) => order.status === 'COMPLETED') || [],
+        cancelled: user.orders?.filter((order: any) => order.status === 'CANCELLED') || []
+      };
+      
+      // Сумма только оплаченных (завершенных) заказов
+      const paidOrderSum = ordersByStatus.completed.reduce((sum: number, order: any) => {
         try {
-          const items = JSON.parse(order.itemsJson || '[]');
+          const items = typeof order.itemsJson === 'string' 
+            ? JSON.parse(order.itemsJson || '[]')
+            : (order.itemsJson || []);
           const orderTotal = items.reduce((itemSum: number, item: any) => itemSum + (item.price || 0) * (item.quantity || 1), 0);
           return sum + orderTotal;
         } catch {
           return sum;
         }
-      }, 0) || 0;
+      }, 0);
+      
+      // Определяем приоритетный статус (новые заказы имеют приоритет)
+      const hasNewOrders = ordersByStatus.new.length > 0;
+      const hasProcessingOrders = ordersByStatus.processing.length > 0;
+      const hasCompletedOrders = ordersByStatus.completed.length > 0;
+      const hasCancelledOrders = ordersByStatus.cancelled.length > 0;
+      
+      let priorityStatus = 'none';
+      if (hasNewOrders) priorityStatus = 'new';
+      else if (hasProcessingOrders) priorityStatus = 'processing';
+      else if (hasCompletedOrders) priorityStatus = 'completed';
+      else if (hasCancelledOrders) priorityStatus = 'cancelled';
+      
+      const totalOrderSum = paidOrderSum; // Используем только оплаченные заказы
       const balance = user.balance || partnerProfile?.balance || 0;
       const bonus = partnerProfile?.bonus || 0;
       const lastActivity = user.updatedAt || user.createdAt;
@@ -1682,7 +1772,10 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
         totalOrderSum,
         balance,
         bonus,
-        lastActivity
+        lastActivity,
+        ordersByStatus,
+        priorityStatus,
+        paidOrderSum
       };
     });
 
@@ -1697,9 +1790,32 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
         sortOrder === 'desc' ? b.directPartners - a.directPartners : a.directPartners - b.directPartners
       );
     } else if (sortBy === 'orders') {
-      sortedUsers = usersWithStats.sort((a, b) => 
-        sortOrder === 'desc' ? b.totalOrderSum - a.totalOrderSum : a.totalOrderSum - b.totalOrderSum
-      );
+      sortedUsers = usersWithStats.sort((a, b) => {
+        // Приоритет: сначала пользователи с новыми заказами
+        const aHasNew = a.priorityStatus === 'new';
+        const bHasNew = b.priorityStatus === 'new';
+        
+        if (aHasNew && !bHasNew) return -1;
+        if (!aHasNew && bHasNew) return 1;
+        
+        // Затем по дате последнего заказа (новые сверху)
+        const aLatestOrder = a.orders?.reduce((latest: any, order: any) => {
+          return !latest || new Date(order.createdAt) > new Date(latest.createdAt) ? order : latest;
+        }, null);
+        
+        const bLatestOrder = b.orders?.reduce((latest: any, order: any) => {
+          return !latest || new Date(order.createdAt) > new Date(latest.createdAt) ? order : latest;
+        }, null);
+        
+        if (aLatestOrder && bLatestOrder) {
+          return sortOrder === 'desc' 
+            ? new Date(bLatestOrder.createdAt).getTime() - new Date(aLatestOrder.createdAt).getTime()
+            : new Date(aLatestOrder.createdAt).getTime() - new Date(bLatestOrder.createdAt).getTime();
+        }
+        
+        // Если нет заказов, сортируем по сумме
+        return sortOrder === 'desc' ? b.totalOrderSum - a.totalOrderSum : a.totalOrderSum - b.totalOrderSum;
+      });
     } else if (sortBy === 'activity') {
       sortedUsers = usersWithStats.sort((a, b) => 
         sortOrder === 'desc' ? new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime() : 
@@ -1857,7 +1973,13 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
                     </td>
                     <td>
                       <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
-                      <div style="font-size: 11px; color: #6c757d;">${user.orders?.length || 0} заказов</div>
+                      <div class="orders-count status-${user.priorityStatus}" data-status="${user.priorityStatus}">
+                        ${user.orders?.length || 0} заказов
+                        ${user.priorityStatus === 'new' ? ' 🔴' : ''}
+                        ${user.priorityStatus === 'processing' ? ' 🟡' : ''}
+                        ${user.priorityStatus === 'completed' ? ' 🟢' : ''}
+                        ${user.priorityStatus === 'cancelled' ? ' ⚫' : ''}
+                      </div>
                     </td>
                     <td>
                       <div style="font-size: 13px; color: #6c757d;">
