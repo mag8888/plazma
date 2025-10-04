@@ -275,7 +275,7 @@ router.get('/', requireAdmin, async (req, res) => {
                         <div class="user-info">
                           <div class="user-avatar">${(user.firstName || 'U')[0].toUpperCase()}</div>
                           <div class="user-details">
-                            <h4>${user.firstName || 'Без имени'} ${user.lastName || ''}</h4>
+                            <h4><a href="/admin/users/${user.id}/card" class="user-name-link">${user.firstName || 'Без имени'} ${user.lastName || ''}</a></h4>
                             <p>@${user.username || 'без username'}</p>
                             ${user.inviter ? `<p style="font-size: 11px; color: #6c757d;">Пригласил: @${user.inviter.username || user.inviter.firstName || 'неизвестно'}</p>` : ''}
                           </div>
@@ -499,6 +499,8 @@ router.get('/', requireAdmin, async (req, res) => {
           .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px; }
           .user-details h4 { margin: 0; font-size: 16px; color: #212529; }
           .user-details p { margin: 2px 0 0 0; font-size: 13px; color: #6c757d; }
+          .user-name-link { color: #212529; text-decoration: none; transition: color 0.3s ease; }
+          .user-name-link:hover { color: #007bff; text-decoration: underline; }
           
           .balance { font-weight: bold; font-size: 16px; }
           .balance.positive { color: #28a745; }
@@ -1791,29 +1793,41 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
       );
     } else if (sortBy === 'orders') {
       sortedUsers = usersWithStats.sort((a, b) => {
-        // Приоритет: сначала пользователи с новыми заказами
+        // 1. Приоритет: сначала новые красные заказы
         const aHasNew = a.priorityStatus === 'new';
         const bHasNew = b.priorityStatus === 'new';
         
         if (aHasNew && !bHasNew) return -1;
         if (!aHasNew && bHasNew) return 1;
         
-        // Затем по дате последнего заказа (новые сверху)
-        const aLatestOrder = a.orders?.reduce((latest: any, order: any) => {
-          return !latest || new Date(order.createdAt) > new Date(latest.createdAt) ? order : latest;
-        }, null);
-        
-        const bLatestOrder = b.orders?.reduce((latest: any, order: any) => {
-          return !latest || new Date(order.createdAt) > new Date(latest.createdAt) ? order : latest;
-        }, null);
-        
-        if (aLatestOrder && bLatestOrder) {
-          return sortOrder === 'desc' 
-            ? new Date(bLatestOrder.createdAt).getTime() - new Date(aLatestOrder.createdAt).getTime()
-            : new Date(aLatestOrder.createdAt).getTime() - new Date(bLatestOrder.createdAt).getTime();
+        // 2. Если оба имеют новые заказы или оба не имеют - сортируем по дате новых заказов
+        if (aHasNew && bHasNew) {
+          const aNewOrder = a.orders?.find((order: any) => order.status === 'NEW');
+          const bNewOrder = b.orders?.find((order: any) => order.status === 'NEW');
+          
+          if (aNewOrder && bNewOrder) {
+            return new Date(bNewOrder.createdAt).getTime() - new Date(aNewOrder.createdAt).getTime();
+          }
         }
         
-        // Если нет заказов, сортируем по сумме
+        // 3. Затем приоритет: новые зеленые заказы
+        const aHasCompleted = a.priorityStatus === 'completed';
+        const bHasCompleted = b.priorityStatus === 'completed';
+        
+        if (aHasCompleted && !bHasCompleted) return -1;
+        if (!aHasCompleted && bHasCompleted) return 1;
+        
+        // 4. Если оба имеют завершенные заказы - сортируем по дате
+        if (aHasCompleted && bHasCompleted) {
+          const aCompletedOrder = a.orders?.find((order: any) => order.status === 'COMPLETED');
+          const bCompletedOrder = b.orders?.find((order: any) => order.status === 'COMPLETED');
+          
+          if (aCompletedOrder && bCompletedOrder) {
+            return new Date(bCompletedOrder.createdAt).getTime() - new Date(aCompletedOrder.createdAt).getTime();
+          }
+        }
+        
+        // 5. Если нет заказов, сортируем по сумме
         return sortOrder === 'desc' ? b.totalOrderSum - a.totalOrderSum : a.totalOrderSum - b.totalOrderSum;
       });
     } else if (sortBy === 'activity') {
@@ -1858,6 +1872,8 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
           .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px; }
           .user-details h4 { margin: 0; font-size: 16px; color: #212529; }
           .user-details p { margin: 2px 0 0 0; font-size: 13px; color: #6c757d; }
+          .user-name-link { color: #212529; text-decoration: none; transition: color 0.3s ease; }
+          .user-name-link:hover { color: #007bff; text-decoration: underline; }
           
           .balance { font-weight: bold; font-size: 16px; }
           .balance.positive { color: #28a745; }
@@ -4920,8 +4936,350 @@ function getStatusDisplayName(status: string) {
 }
 
 // Show user orders page
-router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
-  try {
+  // Get user card with transaction history
+  router.get('/users/:userId/card', requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      // Get user with all related data
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          orders: {
+            orderBy: { createdAt: 'desc' }
+          },
+          partnerProfile: true,
+          inviter: true,
+          referredUsers: {
+            include: {
+              partnerProfile: true
+            }
+          },
+          userHistory: {
+            orderBy: { createdAt: 'desc' },
+            take: 50
+          }
+        }
+      }) as any;
+
+      if (!user) {
+        return res.status(404).send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Пользователь не найден</title>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+              .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+              .back-btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <a href="/admin" class="back-btn">← Назад к админ-панели</a>
+              <h2>❌ Пользователь не найден</h2>
+              <p>Пользователь с ID ${userId} не существует</p>
+            </div>
+          </body>
+          </html>
+        `);
+      }
+
+      // Calculate statistics
+      const totalOrders = user.orders?.length || 0;
+      const completedOrders = user.orders?.filter((o: any) => o.status === 'COMPLETED').length || 0;
+      const totalSpent = user.orders
+        ?.filter((o: any) => o.status === 'COMPLETED')
+        .reduce((sum: number, order: any) => sum + order.totalAmount, 0) || 0;
+      
+      const totalPartners = user.referredUsers?.length || 0;
+      const activePartners = user.referredUsers?.filter((u: any) => u.partnerProfile).length || 0;
+
+      // Group transactions by date
+      const transactionsByDate: { [key: string]: any[] } = {};
+      user.userHistory?.forEach((tx: any) => {
+        const date = tx.createdAt.toISOString().split('T')[0];
+        if (!transactionsByDate[date]) {
+          transactionsByDate[date] = [];
+        }
+        transactionsByDate[date].push(tx);
+      });
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Карточка клиента - ${user.firstName || 'Без имени'}</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+            .container { max-width: 1200px; margin: 0 auto; }
+            .back-btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-bottom: 20px; }
+            .header { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+            .user-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 32px; margin-bottom: 15px; }
+            .user-info h1 { margin: 0 0 10px 0; color: #212529; }
+            .user-meta { color: #6c757d; margin-bottom: 20px; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }
+            .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+            .stat-value { font-size: 24px; font-weight: bold; color: #007bff; margin-bottom: 5px; }
+            .stat-label { color: #6c757d; font-size: 14px; }
+            .section { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
+            .section h2 { margin: 0 0 20px 0; color: #212529; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+            .transaction-item { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+            .transaction-item:last-child { border-bottom: none; }
+            .transaction-amount { font-weight: bold; }
+            .transaction-amount.positive { color: #28a745; }
+            .transaction-amount.negative { color: #dc3545; }
+            .transaction-details { flex: 1; margin-left: 15px; }
+            .transaction-date { color: #6c757d; font-size: 12px; }
+            .referral-activation { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px; }
+            .activation-form { display: flex; gap: 10px; align-items: end; }
+            .activation-form input, .activation-form select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; }
+            .activation-btn { padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
+            .activation-btn:hover { background: #218838; }
+            .partners-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+            .partner-card { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; }
+            .partner-name { font-weight: bold; margin-bottom: 5px; }
+            .partner-balance { color: #28a745; font-size: 14px; }
+            .tabs { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+            .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; }
+            .tab.active { border-bottom-color: #007bff; color: #007bff; }
+            .tab-content { display: none; }
+            .tab-content.active { display: block; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <a href="/admin" class="back-btn">← Назад к админ-панели</a>
+            
+            <div class="header">
+              <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="user-avatar">${(user.firstName || 'U')[0].toUpperCase()}</div>
+                <div>
+                  <h1>${user.firstName || 'Без имени'} ${user.lastName || ''}</h1>
+                  <div class="user-meta">
+                    <p><strong>@${user.username || 'без username'}</strong></p>
+                    <p>ID: ${user.id}</p>
+                    <p>Регистрация: ${user.createdAt.toLocaleString('ru-RU')}</p>
+                    <p>Баланс: <strong>${user.balance.toFixed(2)} PZ</strong></p>
+                    ${user.inviter ? `<p>Пригласил: <strong>@${(user.inviter as any).username || (user.inviter as any).firstName}</strong></p>` : ''}
+                  </div>
+                </div>
+              </div>
+              
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-value">${totalOrders}</div>
+                  <div class="stat-label">Всего заказов</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">${completedOrders}</div>
+                  <div class="stat-label">Выполненных</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">${totalSpent.toFixed(2)} PZ</div>
+                  <div class="stat-label">Потрачено</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">${totalPartners}</div>
+                  <div class="stat-label">Партнеров</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value">${activePartners}</div>
+                  <div class="stat-label">Активных партнеров</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <h2>🔄 Активация рефералки</h2>
+              <div class="referral-activation">
+                <p><strong>Активировать реферальную программу для пользователя на срок:</strong></p>
+                <form class="activation-form" method="post" action="/admin/users/${user.id}/activate-referral">
+                  <div>
+                    <label>Период:</label><br>
+                    <select name="months" required>
+                      <option value="1">1 месяц</option>
+                      <option value="3">3 месяца</option>
+                      <option value="6">6 месяцев</option>
+                      <option value="12">12 месяцев</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Тип программы:</label><br>
+                    <select name="programType" required>
+                      <option value="DIRECT">Прямая (25%)</option>
+                      <option value="MULTI_LEVEL">Многоуровневая (15%+5%+5%)</option>
+                    </select>
+                  </div>
+                  <button type="submit" class="activation-btn">Активировать</button>
+                </form>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="tabs">
+                <div class="tab active" onclick="showTab('transactions')">📊 История транзакций</div>
+                <div class="tab" onclick="showTab('partners')">👥 Партнеры</div>
+                <div class="tab" onclick="showTab('orders')">📦 Заказы</div>
+              </div>
+
+              <div id="transactions" class="tab-content active">
+                <h2>📊 История транзакций</h2>
+                ${Object.keys(transactionsByDate).length === 0 ? 
+                  '<p style="text-align: center; color: #6c757d; padding: 40px;">Нет транзакций</p>' :
+                  Object.keys(transactionsByDate).map(date => `
+                    <h3 style="color: #6c757d; margin: 20px 0 10px 0; font-size: 16px;">${new Date(date).toLocaleDateString('ru-RU')}</h3>
+                    ${transactionsByDate[date].map(tx => `
+                      <div class="transaction-item">
+                        <div class="transaction-details">
+                          <div><strong>${tx.action}</strong></div>
+                          <div class="transaction-date">${tx.createdAt.toLocaleTimeString('ru-RU')}</div>
+                        </div>
+                        <div class="transaction-amount">
+                          ${tx.amount ? (tx.amount > 0 ? '+' : '') + tx.amount.toFixed(2) + ' PZ' : '0.00 PZ'}
+                        </div>
+                      </div>
+                    `).join('')}
+                  `).join('')
+                }
+              </div>
+
+              <div id="partners" class="tab-content">
+                <h2>👥 Партнеры</h2>
+                ${(user.referredUsers?.length || 0) === 0 ? 
+                  '<p style="text-align: center; color: #6c757d; padding: 40px;">Нет партнеров</p>' :
+                  `<div class="partners-list">
+                    ${user.referredUsers?.map((partner: any) => `
+                      <div class="partner-card">
+                        <div class="partner-name">${partner.firstName || 'Без имени'} ${partner.lastName || ''}</div>
+                        <div>@${partner.username || 'без username'}</div>
+                        <div class="partner-balance">Баланс: ${partner.partnerProfile?.balance || 0} PZ</div>
+                      </div>
+                    `).join('')}
+                  </div>`
+                }
+              </div>
+
+              <div id="orders" class="tab-content">
+                <h2>📦 Заказы</h2>
+                ${(user.orders?.length || 0) === 0 ? 
+                  '<p style="text-align: center; color: #6c757d; padding: 40px;">Нет заказов</p>' :
+                  user.orders?.map((order: any) => `
+                    <div class="transaction-item">
+                      <div class="transaction-details">
+                        <div><strong>Заказ #${order.id}</strong></div>
+                        <div class="transaction-date">${order.createdAt.toLocaleString('ru-RU')}</div>
+                        <div style="font-size: 12px; color: #6c757d;">
+                          Статус: <span style="color: ${order.status === 'NEW' ? '#dc3545' : order.status === 'PROCESSING' ? '#ffc107' : order.status === 'COMPLETED' ? '#28a745' : '#6c757d'}">
+                            ${order.status === 'NEW' ? 'Новый' : order.status === 'PROCESSING' ? 'В обработке' : order.status === 'COMPLETED' ? 'Выполнен' : 'Отменен'}
+                          </span>
+                        </div>
+                      </div>
+                      <div class="transaction-amount ${order.status === 'COMPLETED' ? 'positive' : ''}">
+                        ${order.totalAmount.toFixed(2)} PZ
+                      </div>
+                    </div>
+                  `).join('')
+                }
+              </div>
+            </div>
+          </div>
+
+          <script>
+            function showTab(tabName) {
+              // Hide all tab contents
+              document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+              });
+              
+              // Remove active class from all tabs
+              document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+              });
+              
+              // Show selected tab content
+              document.getElementById(tabName).classList.add('active');
+              
+              // Add active class to clicked tab
+              event.target.classList.add('active');
+            }
+          </script>
+        </body>
+        </html>
+      `;
+
+      res.send(html);
+    } catch (error) {
+      console.error('Error loading user card:', error);
+      res.status(500).send('Ошибка загрузки карточки пользователя');
+    }
+  });
+
+  // Activate referral program for user
+  router.post('/users/:userId/activate-referral', requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { months, programType } = req.body;
+      
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!user) {
+        return res.status(404).send('Пользователь не найден');
+      }
+
+      // Check if user already has partner profile
+      const existingProfile = await prisma.partnerProfile.findUnique({
+        where: { userId }
+      });
+
+      if (existingProfile) {
+        // Update existing profile
+        await prisma.partnerProfile.update({
+          where: { userId },
+          data: {
+            programType: programType as 'DIRECT' | 'MULTI_LEVEL',
+            isActive: true
+          }
+        });
+      } else {
+        // Create new partner profile
+        const referralCode = `REF${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+        
+        await prisma.partnerProfile.create({
+          data: {
+            userId,
+            programType: programType as 'DIRECT' | 'MULTI_LEVEL',
+            referralCode,
+            balance: 0,
+            bonus: 0,
+            isActive: true
+          }
+        });
+      }
+
+      // Add transaction to user history
+      await prisma.userHistory.create({
+        data: {
+          userId,
+          action: 'REFERRAL_ACTIVATED'
+        }
+      });
+
+      res.redirect(`/admin/users/${userId}/card?success=referral_activated`);
+    } catch (error) {
+      console.error('Error activating referral:', error);
+      res.status(500).send('Ошибка активации реферальной программы');
+    }
+  });
+
+  // Get user orders
+  router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
+    try {
     const { userId } = req.params;
     
     // Get user info
