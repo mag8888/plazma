@@ -5111,24 +5111,33 @@ function getStatusDisplayName(status: string) {
         `);
       }
 
-      // Calculate statistics
+      // Calculate statistics with safe handling
       const totalOrders = user.orders?.length || 0;
-      const completedOrders = user.orders?.filter((o: any) => o.status === 'COMPLETED').length || 0;
+      const completedOrders = user.orders?.filter((o: any) => o && o.status === 'COMPLETED').length || 0;
       const totalSpent = user.orders
-        ?.filter((o: any) => o.status === 'COMPLETED')
-        .reduce((sum: number, order: any) => sum + order.totalAmount, 0) || 0;
+        ?.filter((o: any) => o && o.status === 'COMPLETED')
+        .reduce((sum: number, order: any) => {
+          const amount = order?.totalAmount || 0;
+          return sum + (typeof amount === 'number' ? amount : 0);
+        }, 0) || 0;
       
       const totalPartners = referredUsers?.length || 0;
       const activePartners = totalPartners; // Simplified for now
 
-      // Group transactions by date
+      // Group transactions by date with safe handling
       const transactionsByDate: { [key: string]: any[] } = {};
       userHistory?.forEach((tx: any) => {
-        const date = tx.createdAt.toISOString().split('T')[0];
-        if (!transactionsByDate[date]) {
-          transactionsByDate[date] = [];
+        if (tx && tx.createdAt) {
+          try {
+            const date = tx.createdAt.toISOString().split('T')[0];
+            if (!transactionsByDate[date]) {
+              transactionsByDate[date] = [];
+            }
+            transactionsByDate[date].push(tx);
+          } catch (error) {
+            console.error('Error processing transaction date:', error, tx);
+          }
         }
-        transactionsByDate[date].push(tx);
       });
 
       const html = `
