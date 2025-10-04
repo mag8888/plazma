@@ -21,6 +21,8 @@ router.get('/orders-test', requireAdmin, async (req, res) => {
 // Orders management page
 router.get('/orders', requireAdmin, async (req, res) => {
   try {
+    console.log('📦 Loading orders for admin panel...');
+    
     const orders = await prisma.orderRequest.findMany({
       orderBy: [
         { status: 'asc' }, // NEW заказы сначала
@@ -40,6 +42,8 @@ router.get('/orders', requireAdmin, async (req, res) => {
         }
       }
     });
+    
+    console.log(`📦 Found ${orders.length} orders in database`);
 
     // Group orders by status
     const ordersByStatus = {
@@ -261,6 +265,11 @@ router.get('/orders', requireAdmin, async (req, res) => {
               <div style="text-align: center; padding: 40px; color: #6c757d;">
                 <h3>📭 Нет заказов</h3>
                 <p>Заказы появятся здесь после создания пользователями</p>
+                <div style="margin-top: 20px;">
+                  <a href="/admin" class="btn" style="background: #007bff; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px;">
+                    ← Вернуться к админ-панели
+                  </a>
+                </div>
               </div>
             ` : ''}
           </div>
