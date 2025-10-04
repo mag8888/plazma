@@ -2753,30 +2753,149 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-actions { display: flex; flex-wrap: wrap; gap: 8px; }
           .product-actions form { margin: 0; }
           
-          /* Modal styles */
-          .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-          .modal-content { background: white; border-radius: 12px; padding: 0; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
-          .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid #e5e7eb; }
-          .modal-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: #111827; }
-          .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
-          .close-btn:hover { color: #374151; }
-          .form-group { margin-bottom: 16px; }
-          .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #374151; }
-          .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
-          .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-          .form-actions { display: flex; gap: 12px; justify-content: flex-end; padding: 20px; border-top: 1px solid #e5e7eb; }
-          .form-actions button { padding: 10px 20px; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
-          .form-actions button[type="button"] { background: #f3f4f6; color: #374151; }
-          .form-actions button[type="button"]:hover { background: #e5e7eb; }
-          .form-actions button[type="submit"] { background: #3b82f6; color: white; }
-          .form-actions button[type="submit"]:hover { background: #2563eb; }
-          .regions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-          .switch-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+          /* Modal styles - Modern Design */
+          .modal-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); 
+            z-index: 1000; display: flex; align-items: center; justify-content: center; 
+            animation: modalFadeIn 0.3s ease-out;
+          }
+          @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes modalSlideIn { from { transform: translateY(-20px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+          
+          .modal-content { 
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); 
+            border-radius: 16px; padding: 0; max-width: 700px; width: 95%; 
+            max-height: 90vh; overflow-y: auto; 
+            box-shadow: 0 25px 50px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.1); 
+            animation: modalSlideIn 0.3s ease-out;
+            border: 1px solid rgba(255,255,255,0.2);
+          }
+          
+          .modal-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 24px 28px; border-bottom: 1px solid rgba(226, 232, 240, 0.8); 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px 16px 0 0;
+            color: white;
+          }
+          .modal-header h2 { 
+            margin: 0; font-size: 22px; font-weight: 700; 
+            color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+          }
+          .close-btn { 
+            background: rgba(255,255,255,0.2); border: none; font-size: 20px; 
+            cursor: pointer; color: white; padding: 0; width: 32px; height: 32px; 
+            display: flex; align-items: center; justify-content: center; 
+            border-radius: 8px; transition: all 0.2s ease;
+          }
+          .close-btn:hover { background: rgba(255,255,255,0.3); transform: scale(1.1); }
+          
+          .modal-form { padding: 28px; }
+          .form-section { margin-bottom: 24px; }
+          .form-section-title { 
+            font-size: 16px; font-weight: 600; color: #1e293b; 
+            margin-bottom: 16px; padding-bottom: 8px; 
+            border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; gap: 8px;
+          }
+          .form-section-title::before { content: '📋'; font-size: 18px; }
+          
+          .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+          .form-grid.single { grid-template-columns: 1fr; }
+          
+          .form-group { margin-bottom: 20px; }
+          .form-group label { 
+            display: block; margin-bottom: 8px; font-weight: 600; 
+            color: #374151; font-size: 14px; text-transform: uppercase; 
+            letter-spacing: 0.5px;
+          }
+          .form-group input, .form-group select, .form-group textarea { 
+            width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; 
+            border-radius: 10px; font-size: 14px; transition: all 0.2s ease;
+            background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          }
+          .form-group input:focus, .form-group select:focus, .form-group textarea:focus { 
+            outline: none; border-color: #667eea; box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1); 
+            transform: translateY(-1px);
+          }
+          .form-group textarea { min-height: 80px; resize: vertical; }
+          .form-group textarea.large { min-height: 120px; }
+          
+          .price-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+          .price-input { position: relative; }
+          .price-input::after { 
+            content: 'PZ'; position: absolute; right: 12px; top: 50%; 
+            transform: translateY(-50%); color: #6b7280; font-weight: 600; 
+            pointer-events: none;
+          }
+          .price-input.rub::after { content: 'RUB'; }
+          
+          .form-actions { 
+            display: flex; gap: 16px; justify-content: flex-end; 
+            padding: 24px 28px; border-top: 1px solid rgba(226, 232, 240, 0.8); 
+            background: #f8fafc; border-radius: 0 0 16px 16px;
+          }
+          .form-actions button { 
+            padding: 12px 24px; border: none; border-radius: 10px; 
+            font-weight: 600; cursor: pointer; transition: all 0.2s ease; 
+            font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .form-actions button[type="button"] { 
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); 
+            color: #64748b; border: 1px solid #cbd5e1;
+          }
+          .form-actions button[type="button"]:hover { 
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%); 
+            transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+          }
+          .form-actions button[type="submit"] { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; border: 1px solid #5a67d8;
+          }
+          .form-actions button[type="submit"]:hover { 
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%); 
+            transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+          }
+          
+          .regions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+          .switch-row { 
+            display: flex; align-items: center; gap: 12px; cursor: pointer; 
+            padding: 12px; border: 2px solid #e2e8f0; border-radius: 10px; 
+            transition: all 0.2s ease; background: #ffffff;
+          }
+          .switch-row:hover { border-color: #667eea; background: #f8fafc; }
           .switch-row input[type="checkbox"] { display: none; }
-          .switch-slider { width: 44px; height: 24px; background: #d1d5db; border-radius: 12px; position: relative; transition: background 0.2s ease; }
-          .switch-slider::before { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: transform 0.2s ease; }
-          .switch-row input[type="checkbox"]:checked + .switch-slider { background: #3b82f6; }
-          .switch-row input[type="checkbox"]:checked + .switch-slider::before { transform: translateX(20px); }
+          .switch-slider { 
+            width: 48px; height: 28px; background: #cbd5e1; 
+            border-radius: 14px; position: relative; transition: all 0.3s ease; 
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .switch-slider::before { 
+            content: ''; position: absolute; top: 3px; left: 3px; 
+            width: 22px; height: 22px; background: white; border-radius: 50%; 
+            transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+          }
+          .switch-row input[type="checkbox"]:checked + .switch-slider { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+          }
+          .switch-row input[type="checkbox"]:checked + .switch-slider::before { 
+            transform: translateX(20px); 
+          }
+          .switch-label { font-weight: 600; color: #374151; }
+          
+          .status-section { background: #f8fafc; padding: 16px; border-radius: 10px; border: 2px solid #e2e8f0; }
+          .status-row { display: flex; align-items: center; gap: 12px; }
+          .status-label { font-weight: 600; color: #374151; font-size: 16px; }
+          
+          /* Responsive */
+          @media (max-width: 768px) {
+            .modal-content { width: 98%; margin: 10px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .price-row { grid-template-columns: 1fr; }
+            .regions-grid { grid-template-columns: 1fr; }
+            .form-actions { flex-direction: column; }
+          }
           .product-actions button { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap; }
           .product-actions .toggle-btn { background: #fbbf24; color: #92400e; }
           .product-actions .toggle-btn:hover { background: #f59e0b; }
@@ -2956,77 +3075,97 @@ router.get('/products', requireAdmin, async (req, res) => {
                 <div class="modal-overlay" onclick="closeEditModal()">
                   <div class="modal-content" onclick="event.stopPropagation()">
                     <div class="modal-header">
-                      <h2>Редактировать товар</h2>
+                      <h2>✏️ Редактировать товар</h2>
                       <button class="close-btn" onclick="closeEditModal()">&times;</button>
                     </div>
-                    <form id="editProductForm" enctype="multipart/form-data">
+                    
+                    <form id="editProductForm" enctype="multipart/form-data" class="modal-form">
                       <input type="hidden" id="editProductId" name="productId" value="">
                       
-                      <div class="form-group">
-                        <label for="editProductName">Название товара:</label>
-                        <input type="text" id="editProductName" name="title" required>
+                      <div class="form-section">
+                        <div class="form-section-title">Основная информация</div>
+                        <div class="form-grid single">
+                          <div class="form-group">
+                            <label for="editProductName">Название товара</label>
+                            <input type="text" id="editProductName" name="title" required placeholder="Введите название товара">
+                          </div>
+                        </div>
+                        
+                        <div class="form-grid">
+                          <div class="form-group">
+                            <label for="editProductPrice">Цена в PZ</label>
+                            <div class="price-input">
+                              <input type="number" id="editProductPrice" name="price" step="0.01" required placeholder="0.00">
+                            </div>
+                          </div>
+                          <div class="form-group">
+                            <label for="editProductPriceRub">Цена в RUB</label>
+                            <div class="price-input rub">
+                              <input type="number" id="editProductPriceRub" name="priceRub" step="0.01" readonly placeholder="0.00">
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div class="form-grid">
+                          <div class="form-group">
+                            <label for="editProductStock">Остаток на складе</label>
+                            <input type="number" id="editProductStock" name="stock" value="999" required placeholder="999">
+                          </div>
+                          <div class="form-group">
+                            <label for="editProductCategory">Категория</label>
+                            <select id="editProductCategory" name="categoryId" required>
+                              <option value="">Загрузка категорий...</option>
+                            </select>
+                          </div>
+                        </div>
                       </div>
                       
-                      <div class="form-group">
-                        <label for="editProductPrice">Цена (PZ):</label>
-                        <input type="number" id="editProductPrice" name="price" step="0.01" required>
+                      <div class="form-section">
+                        <div class="form-section-title">Описание товара</div>
+                        <div class="form-group">
+                          <label for="editProductSummary">Краткое описание</label>
+                          <textarea id="editProductSummary" name="summary" rows="3" placeholder="Краткое описание для карточки товара"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                          <label for="editProductDescription">Полное описание</label>
+                          <textarea id="editProductDescription" name="description" rows="5" class="large" placeholder="Подробное описание товара, применение, состав и т.д."></textarea>
+                        </div>
                       </div>
                       
-                      <div class="form-group">
-                        <label for="editProductPriceRub">Цена (RUB):</label>
-                        <input type="number" id="editProductPriceRub" name="priceRub" step="0.01" readonly>
+                      <div class="form-section">
+                        <div class="form-section-title">Настройки доставки</div>
+                        <div class="form-group">
+                          <label>Регионы доставки</label>
+                          <div class="regions-grid">
+                            <label class="switch-row">
+                              <input type="checkbox" id="editProductRussia" name="availableInRussia">
+                              <span class="switch-slider"></span>
+                              <span class="switch-label">🇷🇺 Россия</span>
+                            </label>
+                            <label class="switch-row">
+                              <input type="checkbox" id="editProductBali" name="availableInBali">
+                              <span class="switch-slider"></span>
+                              <span class="switch-label">🇮🇩 Бали</span>
+                            </label>
+                          </div>
+                        </div>
                       </div>
                       
-                      <div class="form-group">
-                        <label for="editProductStock">Остаток:</label>
-                        <input type="number" id="editProductStock" name="stock" value="999" required>
-                      </div>
-                      
-                      <div class="form-group">
-                        <label for="editProductCategory">Категория:</label>
-                        <select id="editProductCategory" name="categoryId" required>
-                          <option value="">Загрузка...</option>
-                        </select>
-                      </div>
-                      
-                      <div class="form-group">
-                        <label for="editProductSummary">Краткое описание:</label>
-                        <textarea id="editProductSummary" name="summary" rows="3"></textarea>
-                      </div>
-                      
-                      <div class="form-group">
-                        <label for="editProductDescription">Полное описание:</label>
-                        <textarea id="editProductDescription" name="description" rows="5"></textarea>
-                      </div>
-                      
-                      <div class="form-group">
-                        <label>Регионы доставки:</label>
-                        <div class="regions-grid">
-                          <label class="switch-row">
-                            <input type="checkbox" id="editProductRussia" name="availableInRussia">
+                      <div class="form-section">
+                        <div class="form-section-title">Статус публикации</div>
+                        <div class="status-section">
+                          <label class="status-row">
+                            <input type="checkbox" id="editProductStatus" name="isActive">
                             <span class="switch-slider"></span>
-                            <span class="switch-label">🇷🇺 Россия</span>
-                          </label>
-                          <label class="switch-row">
-                            <input type="checkbox" id="editProductBali" name="availableInBali">
-                            <span class="switch-slider"></span>
-                            <span class="switch-label">🇮🇩 Бали</span>
+                            <span class="status-label">✅ Товар активен и доступен для покупки</span>
                           </label>
                         </div>
                       </div>
                       
-                      <div class="form-group">
-                        <label>Статус:</label>
-                        <label class="switch-row">
-                          <input type="checkbox" id="editProductStatus" name="isActive">
-                          <span class="switch-slider"></span>
-                          <span class="switch-label">Активен</span>
-                        </label>
-                      </div>
-                      
                       <div class="form-actions">
-                        <button type="button" onclick="closeEditModal()">Отмена</button>
-                        <button type="submit">Обновить товар</button>
+                        <button type="button" onclick="closeEditModal()">❌ Отмена</button>
+                        <button type="submit">💾 Обновить товар</button>
                       </div>
                     </form>
                   </div>
@@ -3064,6 +3203,19 @@ router.get('/products', requireAdmin, async (req, res) => {
                 });
               });
             
+            // Add price conversion functionality
+            document.getElementById('editProductPrice').addEventListener('input', function() {
+              const pzPrice = parseFloat(this.value) || 0;
+              const rubPrice = pzPrice * 100;
+              document.getElementById('editProductPriceRub').value = rubPrice.toFixed(2);
+            });
+            
+            document.getElementById('editProductPriceRub').addEventListener('input', function() {
+              const rubPrice = parseFloat(this.value) || 0;
+              const pzPrice = rubPrice / 100;
+              document.getElementById('editProductPrice').value = pzPrice.toFixed(2);
+            });
+            
             // Show modal
             modal.style.display = 'block';
             
@@ -3073,9 +3225,24 @@ router.get('/products', requireAdmin, async (req, res) => {
               const formData = new FormData(this);
               const productId = formData.get('productId');
               
+              // Ensure checkboxes are properly handled
+              const formDataToSend = new FormData();
+              formDataToSend.append('productId', productId);
+              formDataToSend.append('title', formData.get('title') || '');
+              formDataToSend.append('price', formData.get('price') || '0');
+              formDataToSend.append('summary', formData.get('summary') || '');
+              formDataToSend.append('description', formData.get('description') || '');
+              formDataToSend.append('categoryId', formData.get('categoryId') || '');
+              formDataToSend.append('stock', formData.get('stock') || '999');
+              
+              // Handle checkboxes properly
+              formDataToSend.append('isActive', document.getElementById('editProductStatus').checked ? 'true' : 'false');
+              formDataToSend.append('availableInRussia', document.getElementById('editProductRussia').checked ? 'true' : 'false');
+              formDataToSend.append('availableInBali', document.getElementById('editProductBali').checked ? 'true' : 'false');
+              
               fetch(\`/admin/products/\${productId}/update\`, {
                 method: 'POST',
-                body: formData
+                body: formDataToSend
               })
               .then(response => response.json())
               .then(data => {
