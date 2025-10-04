@@ -113,9 +113,9 @@ const navigationItems: NavigationItem[] = [
   },
   {
     id: 'about',
-    title: 'О нас',
+    title: 'О PLAZMA',
     emoji: 'ℹ️',
-    description: 'Миссия, технологии и команда Plazma Water',
+    description: 'Информация о Plazma Water и соцсети',
     handler: async (ctx) => {
       const { showAbout } = await import('../about/index.js');
       await showAbout(ctx);
@@ -305,7 +305,7 @@ export function mainKeyboard() {
   return Markup.keyboard([
     ['🛒 Магазин', '🛍️ Корзина'],
     ['💰 Партнёрка'],
-    ['⭐ Отзывы', 'ℹ️ О нас'],
+    ['⭐ Отзывы', 'ℹ️ О PLAZMA'],
   ]).resize();
 }
 

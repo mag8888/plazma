@@ -3,17 +3,31 @@ import { Context } from '../../bot/context.js';
 import { BotModule } from '../../bot/types.js';
 import { logUserAction } from '../../services/user-history.js';
 
-const aboutText = `🤝 Мы в соцсетях — присоединяйтесь к сообществу Plazma Water!
+const aboutText = `💧 <b>О PLAZMA WATER</b>
+
+✨ <b>Plazma Water</b> — это революционная форма витаминов и микроэлементов в плазменной наноформе.
+
+🚀 <b>Преимущества:</b>
+• Усвоение до 99,9% (в отличие от таблеток 1-10%)
+• Проникает напрямую в клетки
+• Без нагрузки на печень и почки
+• Поддержка иммунитета и восстановление клеток
+
+🤝 <b>Мы в соцсетях</b> — присоединяйтесь к сообществу!
 Следите за новостями, делитесь опытом и приглашайте друзей 💧
 
+<b>Наши ресурсы:</b>
 VK: https://vk.com/iplazma
 Инстаграм: https://www.instagram.com/iplazmanano/
 Каталог: https://iplazma.tilda.ws/
-https://t.me/iplasmanano`;
+Telegram: https://t.me/iplasmanano`;
 
 export const aboutModule: BotModule = {
   async register(bot: Telegraf<Context>) {
-    // Обработчик перенесен в navigation модуль
+    bot.hears(['ℹ️ О PLAZMA'], async (ctx) => {
+      await logUserAction(ctx, 'menu:about');
+      await showAbout(ctx);
+    });
   },
 };
 
