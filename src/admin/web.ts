@@ -84,24 +84,13 @@ router.post('/login', (req, res) => {
 // Main admin panel
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    // Calculate total balance of all partners (balance = total bonuses)
-    const partners = await prisma.partnerProfile.findMany({
-      include: {
-        user: { select: { firstName: true, lastName: true } },
-        transactions: true
-      }
+    // Calculate total balance of all users (not just partners)
+    const allUsers = await prisma.user.findMany({
+      select: { balance: true }
     });
-    const totalBalance = partners.reduce((sum, partner) => sum + partner.balance, 0);
+    const totalBalance = allUsers.reduce((sum, user) => sum + (user.balance || 0), 0);
     
-    // Debug: Log partner balances
-    console.log('🔍 Debug: Partner balances:');
-    partners.forEach(partner => {
-      console.log(`  - ${partner.user.firstName || 'User'}: balance=${partner.balance}, transactions=${partner.transactions.length}`);
-      partner.transactions.forEach(tx => {
-        console.log(`    * ${tx.type} ${tx.amount} PZ - ${tx.description}`);
-      });
-    });
-    console.log(`🔍 Debug: Total calculated balance: ${totalBalance} PZ`);
+    console.log(`🔍 Debug: Total balance of all users: ${totalBalance} PZ`);
 
     const stats = {
       categories: await prisma.category.count(),
@@ -205,8 +194,16 @@ router.get('/', requireAdmin, async (req, res) => {
           return '<div class="empty-state"><h3>📭 Нет пользователей</h3><p>Пользователи появятся здесь после регистрации</p></div>';
         }
 
+        // Calculate total balance of all users for this section
+        const totalUserBalance = usersWithStats.reduce((sum, user) => sum + (user.balance || 0), 0);
+
         return `
           <div class="detailed-users-container">
+            <!-- Total Balance Header -->
+            <div style="background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 2px solid #28a745; box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2);">
+              <h3 style="margin: 0; color: #28a745; font-size: 18px;">💰 Общий баланс всех пользователей: ${totalUserBalance.toFixed(2)} PZ</h3>
+            </div>
+            
             <div class="table-controls" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
               <div class="sort-controls">
                 <label>Сортировать по:</label>
@@ -686,10 +683,6 @@ router.get('/', requireAdmin, async (req, res) => {
               </button>
             </div>
             
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
-              <h3 style="margin: 0; color: #1976d2;">💰 Общий баланс всех партнёров: ${stats.totalBalance.toFixed(2)} PZ</h3>
-            </div>
-
             <!-- Detailed Users Section -->
             <div class="section-header">
               <h2 class="section-title">👥 Детальная информация о пользователях</h2>
@@ -721,7 +714,7 @@ router.get('/', requireAdmin, async (req, res) => {
                       💰 Общий баланс: ${totalBalance.toFixed(2)} PZ
                     </div>
                     <div style="font-size: 12px; color: #666; margin-top: 2px;">
-                      Сумма всех балансов партнёров
+                      Сумма всех балансов пользователей
                     </div>
                   </div>
                   ${await getRecentTransactions()}
