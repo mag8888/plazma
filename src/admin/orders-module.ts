@@ -13,6 +13,11 @@ const requireAdmin = (req: express.Request, res: express.Response, next: express
   next();
 };
 
+// Test endpoint to check if module is working
+router.get('/orders-test', requireAdmin, async (req, res) => {
+  res.json({ success: true, message: 'Orders module is working!' });
+});
+
 // Orders management page
 router.get('/orders', requireAdmin, async (req, res) => {
   try {
