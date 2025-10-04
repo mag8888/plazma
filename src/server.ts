@@ -9,7 +9,6 @@ import { Context, SessionData } from './bot/context.js';
 import { applyBotModules } from './bot/setup-modules.js';
 import { prisma } from './lib/prisma.js';
 import { ensureInitialData } from './lib/bootstrap.js';
-import { setupAdminPanel } from './admin/index.js';
 import { adminWebRouter } from './admin/web.js';
 import { setBotInstance } from './lib/bot-instance.js';
 
@@ -33,9 +32,6 @@ async function bootstrap() {
       cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
     }));
 
-    // Setup AdminJS panel
-    await setupAdminPanel(app);
-    
     // Web admin panel
     app.use('/admin', adminWebRouter);
 
