@@ -5049,41 +5049,62 @@ function getStatusDisplayName(status: string) {
     }
   });
 
-  // Get user card with transaction history
+  // Get user card with transaction history (simplified version)
   router.get('/users/:userId/card', requireAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
       console.log(`🔍 Loading user card for ID: ${userId}`);
       
-      // Get user with all related data
+      // Get user with basic data only (no include to avoid complex queries)
       const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          orders: {
-            orderBy: { createdAt: 'desc' }
-          }
-        }
-      }) as any;
+        where: { id: userId }
+      });
       
       console.log(`👤 User found:`, user ? `${user.firstName} ${user.lastName}` : 'null');
-      console.log(`📦 User orders count:`, user?.orders?.length || 0);
 
-      // Get partner profile and inviter separately
+      if (!user) {
+        return res.status(404).send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Пользователь не найден</title>
+            <meta charset="utf-8">
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+              .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+              .back-btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <a href="/admin" class="back-btn">← Назад к админ-панели</a>
+              <h2>❌ Пользователь не найден</h2>
+              <p>Пользователь с ID ${userId} не существует</p>
+            </div>
+          </body>
+          </html>
+        `);
+      }
+
+      // Get data separately to avoid complex queries
+      console.log(`📦 Getting orders for user: ${userId}`);
+      const orders = await prisma.orderRequest.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' }
+      });
+      console.log(`📦 Orders count:`, orders?.length || 0);
+
       console.log(`🤝 Getting partner profile for user: ${userId}`);
       const partnerProfile = await prisma.partnerProfile.findUnique({
         where: { userId }
       });
       console.log(`🤝 Partner profile found:`, partnerProfile ? 'yes' : 'no');
 
-      // Get inviter and referred users - simplified approach
-      const inviter = null; // Will be implemented when schema is available
-      const referredUsers: any[] = []; // Will be implemented when schema is available
-
       console.log(`📊 Getting user history for user: ${userId}`);
       const userHistory = await prisma.userHistory.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
-        take: 50
+        take: 20 // Limit to 20 records to avoid issues
       });
       console.log(`📊 User history count:`, userHistory?.length || 0);
 
@@ -5112,17 +5133,17 @@ function getStatusDisplayName(status: string) {
       }
 
       // Calculate statistics with safe handling
-      const totalOrders = user.orders?.length || 0;
-      const completedOrders = user.orders?.filter((o: any) => o && o.status === 'COMPLETED').length || 0;
-      const totalSpent = user.orders
+      const totalOrders = orders?.length || 0;
+      const completedOrders = orders?.filter((o: any) => o && o.status === 'COMPLETED').length || 0;
+      const totalSpent = orders
         ?.filter((o: any) => o && o.status === 'COMPLETED')
         .reduce((sum: number, order: any) => {
           const amount = order?.totalAmount || 0;
           return sum + (typeof amount === 'number' ? amount : 0);
         }, 0) || 0;
       
-      const totalPartners = referredUsers?.length || 0;
-      const activePartners = totalPartners; // Simplified for now
+      const totalPartners = 0; // Simplified for now
+      const activePartners = 0; // Simplified for now
 
       // Group transactions by date with safe handling
       const transactionsByDate: { [key: string]: any[] } = {};
