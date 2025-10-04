@@ -4918,21 +4918,42 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
           }
           
           .status-btn {
-            padding: 6px 12px; border: 1px solid #dee2e6; 
-            border-radius: 6px; background: white; cursor: pointer; 
-            font-size: 12px; font-weight: 500; transition: all 0.2s ease; 
+            padding: 8px 16px; border: none; 
+            border-radius: 8px; cursor: pointer; 
+            font-size: 12px; font-weight: 600; transition: all 0.2s ease; 
+            color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.2);
           }
           
           .status-btn:hover:not(:disabled) {
-            background: #f8f9fa; border-color: #adb5bd; 
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
           }
           
           .status-btn.active {
-            background: #007bff; color: white; border-color: #007bff; 
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
           }
           
           .status-btn:disabled {
-            opacity: 0.6; cursor: not-allowed; 
+            opacity: 0.7; cursor: not-allowed; 
+            transform: none !important;
+          }
+          
+          /* Цвета статусов */
+          .status-btn[onclick*="NEW"] {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+          }
+          
+          .status-btn[onclick*="PROCESSING"] {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+          }
+          
+          .status-btn[onclick*="COMPLETED"] {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+          }
+          
+          .status-btn[onclick*="CANCELLED"] {
+            background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
           }
           
           .pay-btn {
