@@ -4940,6 +4940,7 @@ function getStatusDisplayName(status: string) {
   router.get('/users/:userId/card', requireAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
+      console.log(`🔍 Loading user card for ID: ${userId}`);
       
       // Get user with all related data
       const user = await prisma.user.findUnique({
@@ -4950,21 +4951,28 @@ function getStatusDisplayName(status: string) {
           }
         }
       }) as any;
+      
+      console.log(`👤 User found:`, user ? `${user.firstName} ${user.lastName}` : 'null');
+      console.log(`📦 User orders count:`, user?.orders?.length || 0);
 
       // Get partner profile and inviter separately
+      console.log(`🤝 Getting partner profile for user: ${userId}`);
       const partnerProfile = await prisma.partnerProfile.findUnique({
         where: { userId }
       });
+      console.log(`🤝 Partner profile found:`, partnerProfile ? 'yes' : 'no');
 
       // Get inviter and referred users - simplified approach
       const inviter = null; // Will be implemented when schema is available
       const referredUsers: any[] = []; // Will be implemented when schema is available
 
+      console.log(`📊 Getting user history for user: ${userId}`);
       const userHistory = await prisma.userHistory.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         take: 50
       });
+      console.log(`📊 User history count:`, userHistory?.length || 0);
 
       if (!user) {
         return res.status(404).send(`
@@ -5217,7 +5225,12 @@ function getStatusDisplayName(status: string) {
 
       res.send(html);
     } catch (error) {
-      console.error('Error loading user card:', error);
+      console.error('❌ Error loading user card:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        userId: req.params.userId
+      });
       res.status(500).send('Ошибка загрузки карточки пользователя');
     }
   });
