@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Markup } from 'telegraf';
 import { Context } from '../../bot/context.js';
 import { BotModule } from '../../bot/types.js';
 import { logUserAction } from '../../services/user-history.js';
@@ -27,7 +27,16 @@ const aboutText = `👋 Добро пожаловать в Plazma Water
 🧠 Улучшает работу мозга и память
 ⚖️ Балансирует гормоны
 ✨ Омолаживает организм
-🛡 Укрепляет иммунитет и защищает от вирусов`;
+🛡 Укрепляет иммунитет и защищает от вирусов
+
+⸻
+
+🔗 Наши соцсети и ресурсы:
+
+📱 VK: https://vk.com/iplazma
+📸 Instagram: https://www.instagram.com/iplazmanano/
+🌐 Каталог: https://iplazma.tilda.ws/
+💬 Telegram: https://t.me/iplasmanano`;
 
 export const aboutModule: BotModule = {
   async register(bot: Telegraf<Context>) {
@@ -39,5 +48,16 @@ export const aboutModule: BotModule = {
 };
 
 export async function showAbout(ctx: Context) {
-  await ctx.reply(aboutText);
+  const keyboard = Markup.inlineKeyboard([
+    [
+      Markup.button.url('📱 VK', 'https://vk.com/iplazma'),
+      Markup.button.url('📸 Instagram', 'https://www.instagram.com/iplazmanano/')
+    ],
+    [
+      Markup.button.url('🌐 Каталог', 'https://iplazma.tilda.ws/'),
+      Markup.button.url('💬 Telegram', 'https://t.me/iplasmanano')
+    ]
+  ]);
+
+  await ctx.reply(aboutText, keyboard);
 }
