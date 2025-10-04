@@ -4754,6 +4754,35 @@ function createUserOrderCard(order: any) {
           Итого: ${totalAmount.toFixed(2)} PZ
         </div>
       </div>
+      
+      <div class="order-actions">
+        <div class="status-buttons">
+          <button class="status-btn ${order.status === 'NEW' ? 'active' : ''}" 
+                  onclick="updateOrderStatus('${order.id}', 'NEW')" 
+                  ${order.status === 'NEW' ? 'disabled' : ''}>
+            🔴 Новый
+          </button>
+          <button class="status-btn ${order.status === 'PROCESSING' ? 'active' : ''}" 
+                  onclick="updateOrderStatus('${order.id}', 'PROCESSING')" 
+                  ${order.status === 'PROCESSING' ? 'disabled' : ''}>
+            🟡 В обработке
+          </button>
+          <button class="status-btn ${order.status === 'COMPLETED' ? 'active' : ''}" 
+                  onclick="updateOrderStatus('${order.id}', 'COMPLETED')" 
+                  ${order.status === 'COMPLETED' ? 'disabled' : ''}>
+            🟢 Готово
+          </button>
+          <button class="status-btn ${order.status === 'CANCELLED' ? 'active' : ''}" 
+                  onclick="updateOrderStatus('${order.id}', 'CANCELLED')" 
+                  ${order.status === 'CANCELLED' ? 'disabled' : ''}>
+            ⚫ Отмена
+          </button>
+        </div>
+        
+        ${order.status !== 'COMPLETED' && order.status !== 'CANCELLED' ? 
+          '<button class="pay-btn" onclick="payFromBalance(\'' + order.id + '\', ' + totalAmount + ')">💳 Оплатить с баланса</button>' 
+          : ''}
+      </div>
     </div>
   `;
 }
@@ -4878,6 +4907,47 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
             color: #28a745; text-align: right; 
           }
           
+          .order-actions {
+            margin-top: 20px; padding-top: 20px; 
+            border-top: 1px solid #e9ecef; 
+          }
+          
+          .status-buttons {
+            display: flex; gap: 8px; margin-bottom: 15px; 
+            flex-wrap: wrap; 
+          }
+          
+          .status-btn {
+            padding: 6px 12px; border: 1px solid #dee2e6; 
+            border-radius: 6px; background: white; cursor: pointer; 
+            font-size: 12px; font-weight: 500; transition: all 0.2s ease; 
+          }
+          
+          .status-btn:hover:not(:disabled) {
+            background: #f8f9fa; border-color: #adb5bd; 
+          }
+          
+          .status-btn.active {
+            background: #007bff; color: white; border-color: #007bff; 
+          }
+          
+          .status-btn:disabled {
+            opacity: 0.6; cursor: not-allowed; 
+          }
+          
+          .pay-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%); 
+            color: white; border: none; padding: 12px 24px; 
+            border-radius: 8px; font-weight: 600; cursor: pointer; 
+            font-size: 14px; transition: all 0.2s ease; 
+            box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2); 
+          }
+          
+          .pay-btn:hover {
+            transform: translateY(-1px); 
+            box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3); 
+          }
+          
           .empty-state { text-align: center; padding: 40px; color: #6c757d; }
         </style>
       </head>
@@ -4943,6 +5013,56 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
             ` : ''}
           </div>
         </div>
+        
+        <script>
+          // Update order status
+          async function updateOrderStatus(orderId, newStatus) {
+            try {
+              const response = await fetch(\`/admin/orders/\${orderId}/status\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ status: newStatus })
+              });
+              
+              if (response.ok) {
+                location.reload();
+              } else {
+                alert('Ошибка обновления статуса заказа');
+              }
+            } catch (error) {
+              console.error('Error updating order status:', error);
+              alert('Ошибка обновления статуса заказа');
+            }
+          }
+          
+          // Pay from balance
+          async function payFromBalance(orderId, amount) {
+            if (!confirm(\`Оплатить заказ на сумму \${amount.toFixed(2)} PZ с баланса пользователя?\`)) {
+              return;
+            }
+            
+            try {
+              const response = await fetch(\`/admin/orders/\${orderId}/pay\`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include'
+              });
+              
+              const result = await response.json();
+              
+              if (result.success) {
+                alert('Заказ успешно оплачен! Статус изменен на "Готово".');
+                location.reload();
+              } else {
+                alert(\`Ошибка оплаты: \${result.error || 'Недостаточно средств на балансе'}\`);
+              }
+            } catch (error) {
+              console.error('Error paying order:', error);
+              alert('Ошибка оплаты заказа');
+            }
+          }
+        </script>
       </body>
       </html>
     `);
@@ -4951,6 +5071,177 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
     res.status(500).send('Ошибка загрузки заказов пользователя');
   }
 });
+
+// Update order status
+router.post('/orders/:orderId/status', requireAdmin, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    
+    // Validate status
+    const validStatuses = ['NEW', 'PROCESSING', 'COMPLETED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Неверный статус заказа' });
+    }
+    
+    // Update order status
+    await prisma.orderRequest.update({
+      where: { id: orderId },
+      data: { status }
+    });
+    
+    res.json({ success: true, message: 'Статус заказа обновлен' });
+  } catch (error) {
+    console.error('❌ Update order status error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка обновления статуса заказа' });
+  }
+});
+
+// Pay order from user balance
+router.post('/orders/:orderId/pay', requireAdmin, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Get order with user info
+    const order = await prisma.orderRequest.findUnique({
+      where: { id: orderId },
+      include: {
+        user: {
+          select: { id: true, balance: true, firstName: true }
+        }
+      }
+    });
+    
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Заказ не найден' });
+    }
+    
+    if (!order.user) {
+      return res.status(400).json({ success: false, error: 'Пользователь не найден' });
+    }
+    
+    if (order.status === 'COMPLETED') {
+      return res.status(400).json({ success: false, error: 'Заказ уже оплачен' });
+    }
+    
+    if (order.status === 'CANCELLED') {
+      return res.status(400).json({ success: false, error: 'Нельзя оплатить отмененный заказ' });
+    }
+    
+    // Calculate order total
+    const items = typeof order.itemsJson === 'string' 
+      ? JSON.parse(order.itemsJson || '[]') 
+      : (order.itemsJson || []);
+    const totalAmount = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+    
+    // Check if user has enough balance
+    if (order.user.balance < totalAmount) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Недостаточно средств. Требуется: ${totalAmount.toFixed(2)} PZ, доступно: ${order.user.balance.toFixed(2)} PZ` 
+      });
+    }
+    
+    // Start transaction
+    await prisma.$transaction(async (tx) => {
+      // Deduct amount from user balance
+      await tx.user.update({
+        where: { id: order.user!.id },
+        data: { balance: { decrement: totalAmount } }
+      });
+      
+      // Update order status to COMPLETED
+      await tx.orderRequest.update({
+        where: { id: orderId },
+        data: { status: 'COMPLETED' }
+      });
+      
+      // Create transaction record
+      await tx.userHistory.create({
+        data: {
+          userId: order.user!.id,
+          action: 'ORDER_PAYMENT',
+          payload: {
+            orderId: orderId,
+            amount: -totalAmount,
+            description: `Оплата заказа #${orderId.slice(-8)}`
+          }
+        }
+      });
+    });
+    
+    // Distribute referral bonuses after successful payment
+    try {
+      await distributeReferralBonuses(order.user.id, totalAmount);
+    } catch (bonusError) {
+      console.error('❌ Referral bonus distribution error:', bonusError);
+      // Don't fail the payment if bonus distribution fails
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Заказ оплачен на сумму ${totalAmount.toFixed(2)} PZ. Статус изменен на "Готово".` 
+    });
+  } catch (error) {
+    console.error('❌ Pay order error:', error);
+    res.status(500).json({ success: false, error: 'Ошибка оплаты заказа' });
+  }
+});
+
+// Helper function to distribute referral bonuses
+async function distributeReferralBonuses(userId: string, orderAmount: number) {
+  try {
+    // Find inviter
+    const referralRecord = await prisma.partnerReferral.findFirst({
+      where: { referredId: userId },
+      include: {
+        profile: {
+          include: {
+            user: { select: { id: true, balance: true } }
+          }
+        }
+      }
+    });
+    
+    if (!referralRecord?.profile) {
+      return; // No inviter found
+    }
+    
+    const inviterProfile = referralRecord.profile;
+    const bonusRate = 0.1; // 10% bonus
+    const bonusAmount = orderAmount * bonusRate;
+    
+    // Create bonus transaction
+    await prisma.partnerTransaction.create({
+      data: {
+        profileId: inviterProfile.id,
+        type: 'CREDIT',
+        amount: bonusAmount,
+        description: `Бонус за заказ реферала (${orderAmount.toFixed(2)} PZ)`
+      }
+    });
+    
+    // Update inviter's balance
+    await prisma.user.update({
+      where: { id: inviterProfile.userId },
+      data: { balance: { increment: bonusAmount } }
+    });
+    
+    // Update partner profile balance
+    await prisma.partnerProfile.update({
+      where: { id: inviterProfile.id },
+      data: { 
+        balance: { increment: bonusAmount },
+        bonus: { increment: bonusAmount }
+      }
+    });
+    
+    console.log(`✅ Referral bonus distributed: ${bonusAmount.toFixed(2)} PZ to user ${inviterProfile.userId}`);
+  } catch (error) {
+    console.error('❌ Error distributing referral bonuses:', error);
+    throw error;
+  }
+}
 
 
 // Mount orders module
