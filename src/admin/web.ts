@@ -131,8 +131,28 @@ router.get('/', requireAdmin, async (req, res) => {
           take: 10 // Limit to 10 users for main page
         });
 
+        // Get inviter information for each user
+        const usersWithInviterInfo = await Promise.all(users.map(async (user: any) => {
+          // Find who invited this user
+          const referralRecord = await prisma.partnerReferral.findFirst({
+            where: { referredId: user.id },
+            include: {
+              profile: {
+                include: {
+                  user: { select: { username: true, firstName: true } }
+                }
+              }
+            }
+          });
+
+          return {
+            ...user,
+            inviter: referralRecord?.profile?.user || null
+          };
+        }));
+
         // Calculate additional data for each user
-        const usersWithStats = users.map((user: any) => {
+        const usersWithStats = usersWithInviterInfo.map((user: any) => {
           const partnerProfile = user.partner;
           const directPartners = partnerProfile?.referrals?.length || 0;
           
@@ -231,18 +251,26 @@ router.get('/', requireAdmin, async (req, res) => {
                           <div class="user-details">
                             <h4>${user.firstName || 'Без имени'} ${user.lastName || ''}</h4>
                             <p>@${user.username || 'без username'}</p>
+                            ${user.inviter ? `<p style="font-size: 11px; color: #6c757d;">Пригласил: @${user.inviter.username || user.inviter.firstName || 'неизвестно'}</p>` : ''}
                           </div>
                         </div>
                       </td>
                       <td>
-                        <div class="balance ${user.balance > 0 ? 'positive' : 'zero'}">
-                          ${user.balance.toFixed(2)} PZ
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <div class="balance ${user.balance > 0 ? 'positive' : 'zero'}">
+                            ${user.balance.toFixed(2)} PZ
+                          </div>
+                          <button class="balance-plus-btn" onclick="openBalanceModal('${user.id}', '${user.firstName || 'Пользователь'}', ${user.balance})" title="Изменить баланс">
+                            +
+                          </button>
                         </div>
                         ${user.bonus > 0 ? `<div style="font-size: 11px; color: #6c757d;">Бонусы: ${user.bonus.toFixed(2)} PZ</div>` : ''}
                       </td>
                       <td>
-                        <div class="partners-count">${user.totalPartners} всего</div>
-                        ${user.directPartners > 0 ? `<div style="font-size: 11px; color: #6c757d;">${user.directPartners} прямых</div>` : ''}
+                        <button class="partners-count-btn" onclick="showUserPartners('${user.id}', '${user.firstName || 'Пользователь'}')" style="background: none; border: none; cursor: pointer; padding: 0;">
+                          <div class="partners-count">${user.totalPartners} всего</div>
+                          ${user.directPartners > 0 ? `<div style="font-size: 11px; color: #6c757d;">${user.directPartners} прямых</div>` : ''}
+                        </button>
                       </td>
                       <td>
                         <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
@@ -449,6 +477,95 @@ router.get('/', requireAdmin, async (req, res) => {
           .action-btn:hover { background: #0056b3; }
           .action-btn.hierarchy { background: #28a745; }
           .action-btn.hierarchy:hover { background: #1e7e34; }
+          
+          .balance-plus-btn { 
+            background: #28a745; 
+            color: white; 
+            border: none; 
+            border-radius: 50%; 
+            width: 24px; 
+            height: 24px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: bold; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            transition: all 0.2s ease;
+          }
+          .balance-plus-btn:hover { 
+            background: #218838; 
+            transform: scale(1.1); 
+          }
+          
+          .partners-count-btn:hover .partners-count { 
+            background: #bbdefb; 
+            transform: scale(1.05); 
+            transition: all 0.2s ease;
+          }
+          
+          /* Balance Modal Styles */
+          .modal-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); 
+            z-index: 1000; display: flex; align-items: center; justify-content: center; 
+            animation: modalFadeIn 0.3s ease-out;
+          }
+          @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+          @keyframes modalSlideIn { from { transform: translateY(-20px) scale(0.95); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+          
+          .modal-content { 
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); 
+            border-radius: 16px; padding: 0; max-width: 500px; width: 95%; 
+            box-shadow: 0 25px 50px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.1); 
+            animation: modalSlideIn 0.3s ease-out;
+          }
+          
+          .modal-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 20px 24px; border-bottom: 1px solid rgba(226, 232, 240, 0.8); 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px 16px 0 0;
+            color: white;
+          }
+          .modal-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+          .close-btn { 
+            background: rgba(255,255,255,0.2); border: none; font-size: 18px; 
+            cursor: pointer; color: white; padding: 0; width: 28px; height: 28px; 
+            display: flex; align-items: center; justify-content: center; 
+            border-radius: 6px; transition: all 0.2s ease;
+          }
+          .close-btn:hover { background: rgba(255,255,255,0.3); }
+          
+          .modal-body { padding: 24px; }
+          .modal-body .form-group { margin-bottom: 16px; }
+          .modal-body label { display: block; margin-bottom: 6px; font-weight: 600; color: #374151; }
+          .modal-body input, .modal-body select, .modal-body textarea { 
+            width: 100%; padding: 10px 12px; border: 2px solid #e2e8f0; 
+            border-radius: 8px; font-size: 14px; transition: all 0.2s ease;
+          }
+          .modal-body input:focus, .modal-body select:focus, .modal-body textarea:focus { 
+            outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); 
+          }
+          
+          .form-actions { 
+            display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;
+          }
+          .form-actions button { 
+            padding: 10px 20px; border: none; border-radius: 8px; 
+            font-weight: 600; cursor: pointer; transition: all 0.2s ease; 
+          }
+          .form-actions button[type="button"] { 
+            background: #e2e8f0; color: #64748b; 
+          }
+          .form-actions button[type="button"]:hover { background: #cbd5e1; }
+          .form-actions button[type="submit"] { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+          }
+          .form-actions button[type="submit"]:hover { 
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%); 
+          }
           
           /* Table Controls Styles */
           .table-controls { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6; }
@@ -890,6 +1007,92 @@ router.get('/', requireAdmin, async (req, res) => {
           
           function showUserDetails(userId) {
             window.open(\`/admin/users/\${userId}\`, '_blank', 'width=600,height=400');
+          }
+          
+          // Balance management modal
+          function openBalanceModal(userId, userName, currentBalance) {
+            const modal = document.createElement('div');
+            modal.id = 'balanceModal';
+            modal.innerHTML = \`
+              <div class="modal-overlay" onclick="closeBalanceModal()">
+                <div class="modal-content" onclick="event.stopPropagation()">
+                  <div class="modal-header">
+                    <h2>💰 Управление балансом</h2>
+                    <button class="close-btn" onclick="closeBalanceModal()">&times;</button>
+                  </div>
+                  <div class="modal-body">
+                    <p><strong>Пользователь:</strong> \${userName}</p>
+                    <p><strong>Текущий баланс:</strong> \${currentBalance.toFixed(2)} PZ</p>
+                    <form id="balanceForm">
+                      <input type="hidden" name="userId" value="\${userId}">
+                      <div class="form-group">
+                        <label>Тип операции:</label>
+                        <select name="operation" required>
+                          <option value="">Выберите операцию</option>
+                          <option value="add">Начислить</option>
+                          <option value="subtract">Списать</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Сумма (PZ):</label>
+                        <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00">
+                      </div>
+                      <div class="form-group">
+                        <label>Комментарий:</label>
+                        <textarea name="comment" rows="3" placeholder="Причина изменения баланса"></textarea>
+                      </div>
+                      <div class="form-actions">
+                        <button type="button" onclick="closeBalanceModal()">Отмена</button>
+                        <button type="submit">Применить</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            \`;
+            document.body.appendChild(modal);
+            
+            // Handle form submission
+            document.getElementById('balanceForm').onsubmit = async function(e) {
+              e.preventDefault();
+              const formData = new FormData(this);
+              const userId = formData.get('userId');
+              const operation = formData.get('operation');
+              const amount = parseFloat(formData.get('amount'));
+              const comment = formData.get('comment');
+              
+              try {
+                const response = await fetch('/admin/users/' + userId + '/update-balance', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({ operation, amount, comment })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                  alert('Баланс успешно обновлен!');
+                  closeBalanceModal();
+                  location.reload();
+                } else {
+                  alert('Ошибка: ' + result.error);
+                }
+              } catch (error) {
+                alert('Ошибка: ' + error.message);
+              }
+            };
+          }
+          
+          function closeBalanceModal() {
+            const modal = document.getElementById('balanceModal');
+            if (modal) {
+              modal.remove();
+            }
+          }
+          
+          // Show user partners
+          function showUserPartners(userId, userName) {
+            window.open(\`/admin/users/\${userId}/partners\`, '_blank', 'width=800,height=600');
           }
           
           // Global function for loading categories
@@ -4206,6 +4409,85 @@ router.post('/fix-roman-bonuses', requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('❌ Fix Roman bonuses error:', error);
     res.redirect('/admin/partners?error=roman_bonuses_fix_failed');
+  }
+});
+
+// Update user balance
+router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { operation, amount, comment } = req.body;
+    
+    console.log('💰 Balance update request:', { userId, operation, amount, comment });
+    
+    if (!operation || !amount || amount <= 0) {
+      return res.json({ success: false, error: 'Неверные параметры' });
+    }
+    
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { partner: true }
+    });
+    
+    if (!user) {
+      return res.json({ success: false, error: 'Пользователь не найден' });
+    }
+    
+    const currentBalance = user.balance;
+    let newBalance;
+    
+    if (operation === 'add') {
+      newBalance = currentBalance + amount;
+    } else if (operation === 'subtract') {
+      if (currentBalance < amount) {
+        return res.json({ success: false, error: 'Недостаточно средств на балансе' });
+      }
+      newBalance = currentBalance - amount;
+    } else {
+      return res.json({ success: false, error: 'Неверная операция' });
+    }
+    
+    // Update user balance
+    await prisma.user.update({
+      where: { id: userId },
+      data: { balance: newBalance }
+    });
+    
+    // If user has partner profile, update it too
+    if (user.partner) {
+      await prisma.partnerProfile.update({
+        where: { id: user.partner.id },
+        data: { balance: newBalance }
+      });
+    }
+    
+    // Log the transaction
+    await prisma.userHistory.create({
+      data: {
+        userId,
+        action: 'balance_updated',
+        payload: {
+          operation,
+          amount,
+          oldBalance: currentBalance,
+          newBalance,
+          comment: comment || 'Ручное изменение баланса администратором'
+        }
+      }
+    });
+    
+    console.log(`✅ Balance updated: ${userId} ${operation} ${amount} PZ (${currentBalance} -> ${newBalance})`);
+    
+    res.json({ 
+      success: true, 
+      newBalance,
+      message: `Баланс успешно ${operation === 'add' ? 'пополнен' : 'списан'} на ${amount} PZ`
+    });
+    
+  } catch (error) {
+    console.error('❌ Balance update error:', error);
+    res.json({ success: false, error: 'Ошибка обновления баланса' });
   }
 });
 
