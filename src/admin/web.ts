@@ -4968,6 +4968,87 @@ function getStatusDisplayName(status: string) {
     }
   });
 
+  // Detailed test route for debugging card issues
+  router.get('/debug-user-full/:userId', requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      console.log(`🔍 DEBUG FULL: Testing user ID: ${userId}`);
+      
+      // Test basic user query
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+      console.log(`🔍 DEBUG FULL: Basic user query - success`);
+      
+      // Test user with orders
+      const userWithOrders = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          orders: {
+            orderBy: { createdAt: 'desc' }
+          }
+        }
+      }) as any;
+      console.log(`🔍 DEBUG FULL: User with orders query - success`);
+      console.log(`🔍 DEBUG FULL: Orders count:`, userWithOrders?.orders?.length || 0);
+      
+      // Test partner profile
+      const partnerProfile = await prisma.partnerProfile.findUnique({
+        where: { userId }
+      });
+      console.log(`🔍 DEBUG FULL: Partner profile query - success`);
+      
+      // Test user history
+      const userHistory = await prisma.userHistory.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      });
+      console.log(`🔍 DEBUG FULL: User history query - success`);
+      console.log(`🔍 DEBUG FULL: History count:`, userHistory?.length || 0);
+      
+      // Test calculations
+      const totalOrders = userWithOrders?.orders?.length || 0;
+      const completedOrders = userWithOrders?.orders?.filter((o: any) => o.status === 'COMPLETED').length || 0;
+      const totalSpent = userWithOrders?.orders
+        ?.filter((o: any) => o.status === 'COMPLETED')
+        .reduce((sum: number, order: any) => sum + (order.totalAmount || 0), 0) || 0;
+      
+      console.log(`🔍 DEBUG FULL: Calculations - success`);
+      console.log(`🔍 DEBUG FULL: Total orders: ${totalOrders}, Completed: ${completedOrders}, Spent: ${totalSpent}`);
+      
+      res.json({
+        success: true,
+        userId,
+        userExists: !!user,
+        userData: user ? {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          username: user.username
+        } : null,
+        ordersCount: totalOrders,
+        completedOrdersCount: completedOrders,
+        totalSpent: totalSpent,
+        partnerProfileExists: !!partnerProfile,
+        historyCount: userHistory?.length || 0,
+        allQueriesSuccessful: true
+      });
+    } catch (error) {
+      console.error('🔍 DEBUG FULL Error:', error);
+      console.error('🔍 DEBUG FULL Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        userId: req.params.userId
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        userId: req.params.userId
+      });
+    }
+  });
+
   // Get user card with transaction history
   router.get('/users/:userId/card', requireAdmin, async (req, res) => {
     try {
