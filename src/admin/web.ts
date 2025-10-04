@@ -4412,6 +4412,200 @@ router.post('/fix-roman-bonuses', requireAdmin, async (req, res) => {
   }
 });
 
+// Show user partners page
+router.get('/users/:userId/partners', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get user info
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { partner: true }
+    });
+    
+    if (!user) {
+      return res.status(404).send('Пользователь не найден');
+    }
+    
+    // Get user's partner profile
+    const partnerProfile = await prisma.partnerProfile.findUnique({
+      where: { userId },
+      include: {
+        referrals: {
+          include: {
+            profile: {
+              include: {
+                user: { select: { firstName: true, lastName: true, username: true, telegramId: true } }
+              }
+            }
+          },
+          where: { referredId: { not: null } }
+        }
+      }
+    });
+    
+    if (!partnerProfile) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Партнеры пользователя</title>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+            .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .back-btn { background: #6c757d; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; display: inline-block; margin-bottom: 20px; }
+            .empty-state { text-align: center; padding: 40px; color: #6c757d; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <a href="/admin" class="back-btn">← Назад к админ-панели</a>
+            <div class="empty-state">
+              <h2>👤 ${user.firstName || 'Пользователь'} ${user.lastName || ''}</h2>
+              <p>У этого пользователя нет партнерского профиля</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    // Get actual referred users
+    const referredUserIds = partnerProfile.referrals.map(ref => ref.referredId).filter((id): id is string => Boolean(id));
+    const referredUsers = await prisma.user.findMany({
+      where: { id: { in: referredUserIds } },
+      select: { id: true, firstName: true, lastName: true, username: true, telegramId: true, createdAt: true }
+    });
+    
+    // Group referrals by level
+    const directPartners = partnerProfile.referrals.filter(ref => ref.level === 1);
+    const multiPartners = partnerProfile.referrals.filter(ref => ref.level > 1);
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Партнеры ${user.firstName || 'пользователя'}</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 1000px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .back-btn { background: #6c757d; color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; display: inline-block; margin-bottom: 20px; }
+          .back-btn:hover { background: #5a6268; }
+          .content { padding: 30px; }
+          .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+          .stat-card { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border-left: 4px solid #667eea; }
+          .stat-number { font-size: 24px; font-weight: bold; color: #667eea; }
+          .stat-label { color: #6c757d; margin-top: 5px; }
+          .section { margin-bottom: 30px; }
+          .section-title { font-size: 20px; font-weight: bold; color: #212529; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e9ecef; }
+          .partners-list { display: grid; gap: 15px; }
+          .partner-card { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; }
+          .partner-info { display: flex; align-items: center; gap: 12px; }
+          .partner-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; }
+          .partner-details h4 { margin: 0; font-size: 16px; color: #212529; }
+          .partner-details p { margin: 2px 0 0 0; font-size: 13px; color: #6c757d; }
+          .partner-level { background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+          .partner-date { font-size: 12px; color: #6c757d; margin-top: 5px; }
+          .empty-state { text-align: center; padding: 40px; color: #6c757d; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>👥 Партнеры пользователя</h1>
+            <p>${user.firstName || 'Пользователь'} ${user.lastName || ''} (@${user.username || 'без username'})</p>
+          </div>
+          
+          <div class="content">
+            <a href="/admin" class="back-btn">← Назад к админ-панели</a>
+            
+            <div class="stats">
+              <div class="stat-card">
+                <div class="stat-number">${directPartners.length}</div>
+                <div class="stat-label">Прямых партнеров</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number">${multiPartners.length}</div>
+                <div class="stat-label">Мульти-партнеров</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number">${partnerProfile.referrals.length}</div>
+                <div class="stat-label">Всего партнеров</div>
+              </div>
+            </div>
+            
+            ${directPartners.length > 0 ? `
+              <div class="section">
+                <h3 class="section-title">🎯 Прямые партнеры (уровень 1)</h3>
+                <div class="partners-list">
+                  ${directPartners.map(ref => {
+                    const referredUser = referredUsers.find(u => u.id === ref.referredId);
+                    return referredUser ? `
+                      <div class="partner-card">
+                        <div class="partner-info">
+                          <div class="partner-avatar">${(referredUser.firstName || 'U')[0].toUpperCase()}</div>
+                          <div class="partner-details">
+                            <h4>${referredUser.firstName || 'Без имени'} ${referredUser.lastName || ''}</h4>
+                            <p>@${referredUser.username || 'без username'}</p>
+                            <div class="partner-level">Уровень 1</div>
+                          </div>
+                        </div>
+                        <div class="partner-date">
+                          Присоединился: ${referredUser.createdAt.toLocaleString('ru-RU')}
+                        </div>
+                      </div>
+                    ` : '';
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${multiPartners.length > 0 ? `
+              <div class="section">
+                <h3 class="section-title">🌐 Мульти-партнеры (уровень 2+)</h3>
+                <div class="partners-list">
+                  ${multiPartners.map(ref => {
+                    const referredUser = referredUsers.find(u => u.id === ref.referredId);
+                    return referredUser ? `
+                      <div class="partner-card">
+                        <div class="partner-info">
+                          <div class="partner-avatar">${(referredUser.firstName || 'U')[0].toUpperCase()}</div>
+                          <div class="partner-details">
+                            <h4>${referredUser.firstName || 'Без имени'} ${referredUser.lastName || ''}</h4>
+                            <p>@${referredUser.username || 'без username'}</p>
+                            <div class="partner-level">Уровень ${ref.level}</div>
+                          </div>
+                        </div>
+                        <div class="partner-date">
+                          Присоединился: ${referredUser.createdAt.toLocaleString('ru-RU')}
+                        </div>
+                      </div>
+                    ` : '';
+                  }).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${partnerProfile.referrals.length === 0 ? `
+              <div class="empty-state">
+                <h3>📭 Нет партнеров</h3>
+                <p>У этого пользователя пока нет приглашенных партнеров</p>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('❌ User partners page error:', error);
+    res.status(500).send('Ошибка загрузки партнеров пользователя');
+  }
+});
+
 // Update user balance
 router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
   try {
