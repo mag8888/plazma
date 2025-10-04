@@ -2922,50 +2922,78 @@ router.get('/products', requireAdmin, async (req, res) => {
             const availableInBali = button.dataset.bali === 'true';
             const imageUrl = button.dataset.image;
             
-            // Fill form fields
-            document.getElementById('productId').value = productId;
-            document.getElementById('productName').value = title;
-            document.getElementById('productShortDescription').value = summary;
-            document.getElementById('productFullDescription').value = description;
-            document.getElementById('productPrice').value = price;
-            document.getElementById('productPriceRub').value = (price * 100).toFixed(2);
-            document.getElementById('productStock').value = '999';
-            document.getElementById('productCategory').value = categoryId;
-            document.getElementById('productStatus').checked = isActive;
-            document.getElementById('productRussia').checked = availableInRussia;
-            document.getElementById('productBali').checked = availableInBali;
-            
-            // Set image preview
-            const imagePreview = document.getElementById('imagePreview');
-            if (imageUrl) {
-              imagePreview.src = imageUrl;
-              imagePreview.style.display = 'block';
-              imagePreview.nextElementSibling.style.display = 'none';
-            } else {
-              imagePreview.style.display = 'none';
-              imagePreview.nextElementSibling.style.display = 'flex';
+            // First, open the modal by clicking the "Add Product" button
+            const addProductBtn = document.querySelector('button[onclick="openAddProductModal()"]');
+            if (addProductBtn) {
+              addProductBtn.click();
             }
             
-            // Update modal title and submit button
-            document.querySelector('.product-modal h2').textContent = 'Редактировать товар';
-            document.querySelector('#productModalSubmit').textContent = 'Обновить товар';
-            
-            // Load categories
-            fetch('/admin/api/categories')
-              .then(response => response.json())
-              .then(categories => {
-                const select = document.getElementById('productCategory');
-                select.innerHTML = '<option value="">Выберите категорию</option>';
-                categories.forEach(category => {
-                  const option = document.createElement('option');
-                  option.value = category.id;
-                  option.textContent = category.name;
-                  select.appendChild(option);
+            // Wait a bit for the modal to open, then fill the fields
+            setTimeout(() => {
+              // Fill form fields
+              const productIdField = document.getElementById('productId');
+              const productNameField = document.getElementById('productName');
+              const productShortDescriptionField = document.getElementById('productShortDescription');
+              const productFullDescriptionField = document.getElementById('productFullDescription');
+              const productPriceField = document.getElementById('productPrice');
+              const productPriceRubField = document.getElementById('productPriceRub');
+              const productStockField = document.getElementById('productStock');
+              const productCategoryField = document.getElementById('productCategory');
+              const productStatusField = document.getElementById('productStatus');
+              const productRussiaField = document.getElementById('productRussia');
+              const productBaliField = document.getElementById('productBali');
+              
+              if (productIdField) productIdField.value = productId;
+              if (productNameField) productNameField.value = title;
+              if (productShortDescriptionField) productShortDescriptionField.value = summary;
+              if (productFullDescriptionField) productFullDescriptionField.value = description;
+              if (productPriceField) productPriceField.value = price;
+              if (productPriceRubField) productPriceRubField.value = (price * 100).toFixed(2);
+              if (productStockField) productStockField.value = '999';
+              if (productCategoryField) productCategoryField.value = categoryId;
+              if (productStatusField) productStatusField.checked = isActive;
+              if (productRussiaField) productRussiaField.checked = availableInRussia;
+              if (productBaliField) productBaliField.checked = availableInBali;
+              
+              // Set image preview
+              const imagePreview = document.getElementById('imagePreview');
+              if (imagePreview) {
+                if (imageUrl) {
+                  imagePreview.src = imageUrl;
+                  imagePreview.style.display = 'block';
+                  if (imagePreview.nextElementSibling) {
+                    imagePreview.nextElementSibling.style.display = 'none';
+                  }
+                } else {
+                  imagePreview.style.display = 'none';
+                  if (imagePreview.nextElementSibling) {
+                    imagePreview.nextElementSibling.style.display = 'flex';
+                  }
+                }
+              }
+              
+              // Update modal title and submit button
+              const modalTitle = document.querySelector('.product-modal h2');
+              const submitButton = document.querySelector('#productModalSubmit');
+              if (modalTitle) modalTitle.textContent = 'Редактировать товар';
+              if (submitButton) submitButton.textContent = 'Обновить товар';
+              
+              // Load categories
+              fetch('/admin/api/categories')
+                .then(response => response.json())
+                .then(categories => {
+                  const select = document.getElementById('productCategory');
+                  if (select) {
+                    select.innerHTML = '<option value="">Выберите категорию</option>';
+                    categories.forEach(category => {
+                      const option = document.createElement('option');
+                      option.value = category.id;
+                      option.textContent = category.name;
+                      select.appendChild(option);
+                    });
+                  }
                 });
-              });
-            
-            // Show modal
-            document.getElementById('addProductModal').style.display = 'block';
+            }, 100);
           }
         </script>
       </body>
