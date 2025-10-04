@@ -3314,6 +3314,12 @@ router.post('/products/:productId/update', requireAdmin, upload.single('image'),
     const { productId } = req.params;
     const { title, price, summary, description, isActive, categoryId, stock, availableInRussia, availableInBali } = req.body as any;
     
+    console.log('Update product request:', {
+      productId,
+      body: req.body,
+      file: req.file ? 'file present' : 'no file'
+    });
+    
     let imageUrl = undefined;
     if (req.file) {
       const result = await new Promise((resolve, reject) => {
