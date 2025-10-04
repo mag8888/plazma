@@ -215,7 +215,7 @@ export async function recalculatePartnerBonuses(profileId: string) {
 
   console.log(`💰 Total calculated bonus: ${totalBonus} PZ`);
 
-  // Update both balance and bonus fields
+  // Update both balance and bonus fields in PartnerProfile
   const updatedProfile = await prisma.partnerProfile.update({
     where: { id: profileId },
     data: {
@@ -224,7 +224,14 @@ export async function recalculatePartnerBonuses(profileId: string) {
     }
   });
 
+  // Also update user balance in User table
+  await prisma.user.update({
+    where: { id: updatedProfile.userId },
+    data: { balance: totalBonus }
+  });
+
   console.log(`✅ Updated profile ${profileId}: balance = ${updatedProfile.balance} PZ, bonus = ${updatedProfile.bonus} PZ`);
+  console.log(`✅ Updated user ${updatedProfile.userId}: balance = ${totalBonus} PZ`);
   return totalBonus;
 }
 
