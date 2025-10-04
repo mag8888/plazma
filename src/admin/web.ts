@@ -1073,7 +1073,8 @@ router.get('/', requireAdmin, async (req, res) => {
                 if (result.success) {
                   alert('Баланс успешно обновлен!');
                   closeBalanceModal();
-                  location.reload();
+                  // Force reload without cache
+                  window.location.href = window.location.href + '?t=' + Date.now();
                 } else {
                   alert('Ошибка: ' + result.error);
                 }
@@ -4643,17 +4644,20 @@ router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
     }
     
     // Update user balance
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { balance: newBalance }
     });
     
+    console.log(`✅ User balance updated: ${userId} from ${currentBalance} to ${updatedUser.balance}`);
+    
     // If user has partner profile, update it too
     if (user.partner) {
-      await prisma.partnerProfile.update({
+      const updatedProfile = await prisma.partnerProfile.update({
         where: { id: user.partner.id },
         data: { balance: newBalance }
       });
+      console.log(`✅ Partner profile balance updated: ${user.partner.id} to ${updatedProfile.balance}`);
     }
     
     // Log the transaction
