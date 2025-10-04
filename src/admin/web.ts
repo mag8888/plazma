@@ -186,7 +186,7 @@ router.get('/', requireAdmin, async (req, res) => {
               return sum;
             }
           }, 0) || 0;
-          const balance = partnerProfile?.balance || 0;
+          const balance = user.balance || partnerProfile?.balance || 0;
           const bonus = partnerProfile?.bonus || 0;
           const lastActivity = user.updatedAt || user.createdAt;
           
@@ -1653,7 +1653,7 @@ router.get('/users-detailed', requireAdmin, async (req, res) => {
           return sum;
         }
       }, 0) || 0;
-      const balance = partnerProfile?.balance || 0;
+      const balance = user.balance || partnerProfile?.balance || 0;
       const bonus = partnerProfile?.bonus || 0;
       const lastActivity = user.updatedAt || user.createdAt;
       
@@ -4651,13 +4651,25 @@ router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
     
     console.log(`✅ User balance updated: ${userId} from ${currentBalance} to ${updatedUser.balance}`);
     
-    // If user has partner profile, update it too
+    // If user has partner profile, update it too, otherwise create one
     if (user.partner) {
       const updatedProfile = await prisma.partnerProfile.update({
         where: { id: user.partner.id },
         data: { balance: newBalance }
       });
       console.log(`✅ Partner profile balance updated: ${user.partner.id} to ${updatedProfile.balance}`);
+    } else {
+      // Create partner profile if it doesn't exist
+      const newProfile = await prisma.partnerProfile.create({
+        data: {
+          userId: userId,
+          balance: newBalance,
+          bonus: 0,
+          referralCode: `REF${userId.slice(-8)}`,
+          programType: 'DIRECT'
+        }
+      });
+      console.log(`✅ Partner profile created: ${newProfile.id} with balance ${newBalance}`);
     }
     
     // Log the transaction
