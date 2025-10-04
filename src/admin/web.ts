@@ -2752,6 +2752,31 @@ router.get('/products', requireAdmin, async (req, res) => {
           .product-meta { font-size: 12px; color: #6b7280; display: flex; justify-content: space-between; }
           .product-actions { display: flex; flex-wrap: wrap; gap: 8px; }
           .product-actions form { margin: 0; }
+          
+          /* Modal styles */
+          .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+          .modal-content { background: white; border-radius: 12px; padding: 0; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
+          .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid #e5e7eb; }
+          .modal-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: #111827; }
+          .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
+          .close-btn:hover { color: #374151; }
+          .form-group { margin-bottom: 16px; }
+          .form-group label { display: block; margin-bottom: 6px; font-weight: 500; color: #374151; }
+          .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+          .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+          .form-actions { display: flex; gap: 12px; justify-content: flex-end; padding: 20px; border-top: 1px solid #e5e7eb; }
+          .form-actions button { padding: 10px 20px; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: all 0.2s ease; }
+          .form-actions button[type="button"] { background: #f3f4f6; color: #374151; }
+          .form-actions button[type="button"]:hover { background: #e5e7eb; }
+          .form-actions button[type="submit"] { background: #3b82f6; color: white; }
+          .form-actions button[type="submit"]:hover { background: #2563eb; }
+          .regions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+          .switch-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+          .switch-row input[type="checkbox"] { display: none; }
+          .switch-slider { width: 44px; height: 24px; background: #d1d5db; border-radius: 12px; position: relative; transition: background 0.2s ease; }
+          .switch-slider::before { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: white; border-radius: 50%; transition: transform 0.2s ease; }
+          .switch-row input[type="checkbox"]:checked + .switch-slider { background: #3b82f6; }
+          .switch-row input[type="checkbox"]:checked + .switch-slider::before { transform: translateX(20px); }
           .product-actions button { padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap; }
           .product-actions .toggle-btn { background: #fbbf24; color: #92400e; }
           .product-actions .toggle-btn:hover { background: #f59e0b; }
@@ -2922,78 +2947,158 @@ router.get('/products', requireAdmin, async (req, res) => {
             const availableInBali = button.dataset.bali === 'true';
             const imageUrl = button.dataset.image;
             
-            // First, open the modal by clicking the "Add Product" button
-            const addProductBtn = document.querySelector('button[onclick="openAddProductModal()"]');
-            if (addProductBtn) {
-              addProductBtn.click();
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('editProductModal');
+            if (!modal) {
+              modal = document.createElement('div');
+              modal.id = 'editProductModal';
+              modal.innerHTML = \`
+                <div class="modal-overlay" onclick="closeEditModal()">
+                  <div class="modal-content" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                      <h2>Редактировать товар</h2>
+                      <button class="close-btn" onclick="closeEditModal()">&times;</button>
+                    </div>
+                    <form id="editProductForm" enctype="multipart/form-data">
+                      <input type="hidden" id="editProductId" name="productId" value="">
+                      
+                      <div class="form-group">
+                        <label for="editProductName">Название товара:</label>
+                        <input type="text" id="editProductName" name="title" required>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label for="editProductPrice">Цена (PZ):</label>
+                        <input type="number" id="editProductPrice" name="price" step="0.01" required>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label for="editProductPriceRub">Цена (RUB):</label>
+                        <input type="number" id="editProductPriceRub" name="priceRub" step="0.01" readonly>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label for="editProductStock">Остаток:</label>
+                        <input type="number" id="editProductStock" name="stock" value="999" required>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label for="editProductCategory">Категория:</label>
+                        <select id="editProductCategory" name="categoryId" required>
+                          <option value="">Загрузка...</option>
+                        </select>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label for="editProductSummary">Краткое описание:</label>
+                        <textarea id="editProductSummary" name="summary" rows="3"></textarea>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label for="editProductDescription">Полное описание:</label>
+                        <textarea id="editProductDescription" name="description" rows="5"></textarea>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label>Регионы доставки:</label>
+                        <div class="regions-grid">
+                          <label class="switch-row">
+                            <input type="checkbox" id="editProductRussia" name="availableInRussia">
+                            <span class="switch-slider"></span>
+                            <span class="switch-label">🇷🇺 Россия</span>
+                          </label>
+                          <label class="switch-row">
+                            <input type="checkbox" id="editProductBali" name="availableInBali">
+                            <span class="switch-slider"></span>
+                            <span class="switch-label">🇮🇩 Бали</span>
+                          </label>
+                        </div>
+                      </div>
+                      
+                      <div class="form-group">
+                        <label>Статус:</label>
+                        <label class="switch-row">
+                          <input type="checkbox" id="editProductStatus" name="isActive">
+                          <span class="switch-slider"></span>
+                          <span class="switch-label">Активен</span>
+                        </label>
+                      </div>
+                      
+                      <div class="form-actions">
+                        <button type="button" onclick="closeEditModal()">Отмена</button>
+                        <button type="submit">Обновить товар</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              \`;
+              document.body.appendChild(modal);
             }
             
-            // Wait a bit for the modal to open, then fill the fields
-            setTimeout(() => {
-              // Fill form fields
-              const productIdField = document.getElementById('productId');
-              const productNameField = document.getElementById('productName');
-              const productShortDescriptionField = document.getElementById('productShortDescription');
-              const productFullDescriptionField = document.getElementById('productFullDescription');
-              const productPriceField = document.getElementById('productPrice');
-              const productPriceRubField = document.getElementById('productPriceRub');
-              const productStockField = document.getElementById('productStock');
-              const productCategoryField = document.getElementById('productCategory');
-              const productStatusField = document.getElementById('productStatus');
-              const productRussiaField = document.getElementById('productRussia');
-              const productBaliField = document.getElementById('productBali');
-              
-              if (productIdField) productIdField.value = productId;
-              if (productNameField) productNameField.value = title;
-              if (productShortDescriptionField) productShortDescriptionField.value = summary;
-              if (productFullDescriptionField) productFullDescriptionField.value = description;
-              if (productPriceField) productPriceField.value = price;
-              if (productPriceRubField) productPriceRubField.value = (price * 100).toFixed(2);
-              if (productStockField) productStockField.value = '999';
-              if (productCategoryField) productCategoryField.value = categoryId;
-              if (productStatusField) productStatusField.checked = isActive;
-              if (productRussiaField) productRussiaField.checked = availableInRussia;
-              if (productBaliField) productBaliField.checked = availableInBali;
-              
-              // Set image preview
-              const imagePreview = document.getElementById('imagePreview');
-              if (imagePreview) {
-                if (imageUrl) {
-                  imagePreview.src = imageUrl;
-                  imagePreview.style.display = 'block';
-                  if (imagePreview.nextElementSibling) {
-                    imagePreview.nextElementSibling.style.display = 'none';
+            // Fill form fields
+            document.getElementById('editProductId').value = productId;
+            document.getElementById('editProductName').value = title;
+            document.getElementById('editProductSummary').value = summary;
+            document.getElementById('editProductDescription').value = description;
+            document.getElementById('editProductPrice').value = price;
+            document.getElementById('editProductPriceRub').value = (price * 100).toFixed(2);
+            document.getElementById('editProductStock').value = '999';
+            document.getElementById('editProductStatus').checked = isActive;
+            document.getElementById('editProductRussia').checked = availableInRussia;
+            document.getElementById('editProductBali').checked = availableInBali;
+            
+            // Load categories
+            fetch('/admin/api/categories')
+              .then(response => response.json())
+              .then(categories => {
+                const select = document.getElementById('editProductCategory');
+                select.innerHTML = '<option value="">Выберите категорию</option>';
+                categories.forEach(category => {
+                  const option = document.createElement('option');
+                  option.value = category.id;
+                  option.textContent = category.name;
+                  if (category.id === categoryId) {
+                    option.selected = true;
                   }
-                } else {
-                  imagePreview.style.display = 'none';
-                  if (imagePreview.nextElementSibling) {
-                    imagePreview.nextElementSibling.style.display = 'flex';
-                  }
-                }
-              }
-              
-              // Update modal title and submit button
-              const modalTitle = document.querySelector('.product-modal h2');
-              const submitButton = document.querySelector('#productModalSubmit');
-              if (modalTitle) modalTitle.textContent = 'Редактировать товар';
-              if (submitButton) submitButton.textContent = 'Обновить товар';
-              
-              // Load categories
-              fetch('/admin/api/categories')
-                .then(response => response.json())
-                .then(categories => {
-                  const select = document.getElementById('productCategory');
-                  if (select) {
-                    select.innerHTML = '<option value="">Выберите категорию</option>';
-                    categories.forEach(category => {
-                      const option = document.createElement('option');
-                      option.value = category.id;
-                      option.textContent = category.name;
-                      select.appendChild(option);
-                    });
-                  }
+                  select.appendChild(option);
                 });
-            }, 100);
+              });
+            
+            // Show modal
+            modal.style.display = 'block';
+            
+            // Handle form submission
+            document.getElementById('editProductForm').onsubmit = function(e) {
+              e.preventDefault();
+              const formData = new FormData(this);
+              const productId = formData.get('productId');
+              
+              fetch(\`/admin/products/\${productId}/update\`, {
+                method: 'POST',
+                body: formData
+              })
+              .then(response => response.json())
+              .then(data => {
+                if (data.success) {
+                  alert('Товар успешно обновлен!');
+                  closeEditModal();
+                  location.reload();
+                } else {
+                  alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                }
+              })
+              .catch(error => {
+                alert('Ошибка: ' + error.message);
+              });
+            };
+          }
+          
+          // Function to close edit modal
+          function closeEditModal() {
+            const modal = document.getElementById('editProductModal');
+            if (modal) {
+              modal.style.display = 'none';
+            }
           }
         </script>
       </body>
