@@ -4720,6 +4720,51 @@ router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
   }
 });
 
+// Helper functions for user orders page
+function createUserOrderCard(order: any) {
+  const items = JSON.parse((order.itemsJson as string) || '[]');
+  const totalAmount = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+  
+  return `
+    <div class="order-card ${order.status.toLowerCase()}">
+      <div class="order-header">
+        <div class="order-info">
+          <h4>Заказ #${order.id.slice(-8)}</h4>
+          <p>Дата: ${new Date(order.createdAt).toLocaleString('ru-RU')}</p>
+        </div>
+        <div class="order-status ${order.status.toLowerCase()}">
+          ${getStatusDisplayName(order.status)}
+        </div>
+      </div>
+      
+      <div class="order-details">
+        <div class="order-items">
+          ${items.map((item: any) => `
+            <div class="order-item">
+              <span>${item.title} x${item.quantity}</span>
+              <span>${(item.price * item.quantity).toFixed(2)} PZ</span>
+            </div>
+          `).join('')}
+        </div>
+        
+        <div class="order-total">
+          Итого: ${totalAmount.toFixed(2)} PZ
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function getStatusDisplayName(status: string) {
+  const names = {
+    'NEW': '🔴 Новый',
+    'PROCESSING': '🟡 В обработке',
+    'COMPLETED': '🟢 Готово',
+    'CANCELLED': '⚫ Отмена'
+  };
+  return names[status as keyof typeof names] || status;
+}
+
 // Show user orders page
 router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
   try {
@@ -4849,34 +4894,7 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
                   🔴 Новые заказы (${ordersByStatus.NEW.length})
                 </div>
                 <div class="orders-grid">
-                  ${ordersByStatus.NEW.map(order => `
-                    <div class="order-card ${order.status.toLowerCase()}">
-                      <div class="order-header">
-                        <div class="order-info">
-                          <h4>Заказ #${order.id.slice(-8)}</h4>
-                          <p>Дата: ${new Date(order.createdAt).toLocaleString('ru-RU')}</p>
-                        </div>
-                        <div class="order-status ${order.status.toLowerCase()}">
-                          ${order.status === 'NEW' ? '🔴 Новый' : order.status === 'PROCESSING' ? '🟡 В обработке' : order.status === 'COMPLETED' ? '🟢 Готово' : '⚫ Отмена'}
-                        </div>
-                      </div>
-                      
-                      <div class="order-details">
-                        <div class="order-items">
-                          ${JSON.parse((order.itemsJson as string) || '[]').map((item: any) => `
-                            <div class="order-item">
-                              <span>${item.title} x${item.quantity}</span>
-                              <span>${(item.price * item.quantity).toFixed(2)} PZ</span>
-                            </div>
-                          `).join('')}
-                        </div>
-                        
-                        <div class="order-total">
-                          Итого: ${JSON.parse((order.itemsJson as string) || '[]').reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0).toFixed(2)} PZ
-                        </div>
-                      </div>
-                    </div>
-                  `).join('')}
+                  ${ordersByStatus.NEW.map(order => createUserOrderCard(order)).join('')}
                 </div>
               </div>
             ` : ''}
@@ -4887,34 +4905,7 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
                   🟡 Заказы в обработке (${ordersByStatus.PROCESSING.length})
                 </div>
                 <div class="orders-grid">
-                  ${ordersByStatus.PROCESSING.map(order => `
-                    <div class="order-card ${order.status.toLowerCase()}">
-                      <div class="order-header">
-                        <div class="order-info">
-                          <h4>Заказ #${order.id.slice(-8)}</h4>
-                          <p>Дата: ${new Date(order.createdAt).toLocaleString('ru-RU')}</p>
-                        </div>
-                        <div class="order-status ${order.status.toLowerCase()}">
-                          ${order.status === 'NEW' ? '🔴 Новый' : order.status === 'PROCESSING' ? '🟡 В обработке' : order.status === 'COMPLETED' ? '🟢 Готово' : '⚫ Отмена'}
-                        </div>
-                      </div>
-                      
-                      <div class="order-details">
-                        <div class="order-items">
-                          ${JSON.parse((order.itemsJson as string) || '[]').map((item: any) => `
-                            <div class="order-item">
-                              <span>${item.title} x${item.quantity}</span>
-                              <span>${(item.price * item.quantity).toFixed(2)} PZ</span>
-                            </div>
-                          `).join('')}
-                        </div>
-                        
-                        <div class="order-total">
-                          Итого: ${JSON.parse((order.itemsJson as string) || '[]').reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0).toFixed(2)} PZ
-                        </div>
-                      </div>
-                    </div>
-                  `).join('')}
+                  ${ordersByStatus.PROCESSING.map(order => createUserOrderCard(order)).join('')}
                 </div>
               </div>
             ` : ''}
@@ -4925,34 +4916,7 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
                   🟢 Завершенные заказы (${ordersByStatus.COMPLETED.length})
                 </div>
                 <div class="orders-grid">
-                  ${ordersByStatus.COMPLETED.map(order => `
-                    <div class="order-card ${order.status.toLowerCase()}">
-                      <div class="order-header">
-                        <div class="order-info">
-                          <h4>Заказ #${order.id.slice(-8)}</h4>
-                          <p>Дата: ${new Date(order.createdAt).toLocaleString('ru-RU')}</p>
-                        </div>
-                        <div class="order-status ${order.status.toLowerCase()}">
-                          ${order.status === 'NEW' ? '🔴 Новый' : order.status === 'PROCESSING' ? '🟡 В обработке' : order.status === 'COMPLETED' ? '🟢 Готово' : '⚫ Отмена'}
-                        </div>
-                      </div>
-                      
-                      <div class="order-details">
-                        <div class="order-items">
-                          ${JSON.parse((order.itemsJson as string) || '[]').map((item: any) => `
-                            <div class="order-item">
-                              <span>${item.title} x${item.quantity}</span>
-                              <span>${(item.price * item.quantity).toFixed(2)} PZ</span>
-                            </div>
-                          `).join('')}
-                        </div>
-                        
-                        <div class="order-total">
-                          Итого: ${JSON.parse((order.itemsJson as string) || '[]').reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0).toFixed(2)} PZ
-                        </div>
-                      </div>
-                    </div>
-                  `).join('')}
+                  ${ordersByStatus.COMPLETED.map(order => createUserOrderCard(order)).join('')}
                 </div>
               </div>
             ` : ''}
@@ -4963,34 +4927,7 @@ router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
                   ⚫ Отмененные заказы (${ordersByStatus.CANCELLED.length})
                 </div>
                 <div class="orders-grid">
-                  ${ordersByStatus.CANCELLED.map(order => `
-                    <div class="order-card ${order.status.toLowerCase()}">
-                      <div class="order-header">
-                        <div class="order-info">
-                          <h4>Заказ #${order.id.slice(-8)}</h4>
-                          <p>Дата: ${new Date(order.createdAt).toLocaleString('ru-RU')}</p>
-                        </div>
-                        <div class="order-status ${order.status.toLowerCase()}">
-                          ${order.status === 'NEW' ? '🔴 Новый' : order.status === 'PROCESSING' ? '🟡 В обработке' : order.status === 'COMPLETED' ? '🟢 Готово' : '⚫ Отмена'}
-                        </div>
-                      </div>
-                      
-                      <div class="order-details">
-                        <div class="order-items">
-                          ${JSON.parse((order.itemsJson as string) || '[]').map((item: any) => `
-                            <div class="order-item">
-                              <span>${item.title} x${item.quantity}</span>
-                              <span>${(item.price * item.quantity).toFixed(2)} PZ</span>
-                            </div>
-                          `).join('')}
-                        </div>
-                        
-                        <div class="order-total">
-                          Итого: ${JSON.parse((order.itemsJson as string) || '[]').reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0).toFixed(2)} PZ
-                        </div>
-                      </div>
-                    </div>
-                  `).join('')}
+                  ${ordersByStatus.CANCELLED.map(order => createUserOrderCard(order)).join('')}
                 </div>
               </div>
             ` : ''}
