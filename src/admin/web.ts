@@ -5219,7 +5219,7 @@ function getStatusDisplayName(status: string) {
                     <p>ID: ${user.id}</p>
                     <p>Регистрация: ${user.createdAt.toLocaleString('ru-RU')}</p>
                     <p>Баланс: <strong>${user.balance.toFixed(2)} PZ</strong></p>
-                    ${inviter ? `<p>Пригласил: <strong>@${(inviter as any).username || (inviter as any).firstName}</strong></p>` : ''}
+                    <p>Пригласитель: Не указан</p>
                   </div>
                 </div>
               </div>
@@ -5304,25 +5304,14 @@ function getStatusDisplayName(status: string) {
 
               <div id="partners" class="tab-content">
                 <h2>👥 Партнеры</h2>
-                ${(referredUsers?.length || 0) === 0 ? 
-                  '<p style="text-align: center; color: #6c757d; padding: 40px;">Нет партнеров</p>' :
-                  `<div class="partners-list">
-                    ${referredUsers?.map((partner: any) => `
-                      <div class="partner-card">
-                        <div class="partner-name">${partner.firstName || 'Без имени'} ${partner.lastName || ''}</div>
-                        <div>@${partner.username || 'без username'}</div>
-                        <div class="partner-balance">Партнер</div>
-                      </div>
-                    `).join('')}
-                  </div>`
-                }
+                <p style="text-align: center; color: #6c757d; padding: 40px;">Партнеры будут добавлены в следующей версии</p>
               </div>
 
               <div id="orders" class="tab-content">
                 <h2>📦 Заказы</h2>
-                ${(user.orders?.length || 0) === 0 ? 
+                ${(orders?.length || 0) === 0 ? 
                   '<p style="text-align: center; color: #6c757d; padding: 40px;">Нет заказов</p>' :
-                  user.orders?.map((order: any) => `
+                  orders?.map((order: any) => `
                     <div class="transaction-item">
                       <div class="transaction-details">
                         <div><strong>Заказ #${order.id}</strong></div>
@@ -5334,7 +5323,7 @@ function getStatusDisplayName(status: string) {
                         </div>
                       </div>
                       <div class="transaction-amount ${order.status === 'COMPLETED' ? 'positive' : ''}">
-                        ${order.totalAmount.toFixed(2)} PZ
+                        ${(order.totalAmount || 0).toFixed(2)} PZ
                       </div>
                     </div>
                   `).join('')
