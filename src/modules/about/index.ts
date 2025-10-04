@@ -36,5 +36,5 @@ export async function showAbout(ctx: Context) {
     ]
   ]);
 
-  await ctx.reply(aboutText, keyboard);
+  await ctx.reply(aboutText, { ...keyboard, parse_mode: 'HTML' });
 }
