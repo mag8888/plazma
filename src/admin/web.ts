@@ -271,8 +271,10 @@ router.get('/', requireAdmin, async (req, res) => {
                         </button>
                       </td>
                       <td>
-                        <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
-                        <div style="font-size: 11px; color: #6c757d;">${user.orders?.length || 0} заказов</div>
+                        <button class="orders-sum-btn" onclick="showUserOrders('${user.id}', '${user.firstName || 'Пользователь'}')" style="background: none; border: none; cursor: pointer; padding: 0; width: 100%; text-align: left;">
+                          <div class="orders-sum">${user.totalOrderSum.toFixed(2)} PZ</div>
+                          <div class="orders-count ${(user.orders?.length || 0) > 0 ? 'has-orders' : 'no-orders'}">${user.orders?.length || 0} заказов</div>
+                        </button>
                       </td>
                       <td>
                         <div style="font-size: 13px; color: #6c757d;">
@@ -500,6 +502,24 @@ router.get('/', requireAdmin, async (req, res) => {
             background: #bbdefb; 
             transform: scale(1.05); 
             transition: all 0.2s ease;
+          }
+          
+          .orders-sum-btn:hover .orders-sum { 
+            background: #fff3cd; 
+            transform: scale(1.05); 
+            transition: all 0.2s ease;
+          }
+          
+          .orders-count.has-orders { 
+            color: #dc3545; 
+            font-weight: 600; 
+            background: #f8d7da; 
+            padding: 2px 6px; 
+            border-radius: 4px; 
+            display: inline-block; 
+          }
+          .orders-count.no-orders { 
+            color: #6c757d; 
           }
           
           /* Balance Modal Styles */
@@ -1088,6 +1108,11 @@ router.get('/', requireAdmin, async (req, res) => {
           // Show user partners
           function showUserPartners(userId, userName) {
             window.open(\`/admin/users/\${userId}/partners\`, '_blank', 'width=800,height=600');
+          }
+          
+          // Show user orders
+          function showUserOrders(userId, userName) {
+            window.open(\`/admin/users/\${userId}/orders\`, '_blank', 'width=1000,height=700');
           }
           
           // Global function for loading categories
@@ -4694,6 +4719,235 @@ router.post('/users/:userId/update-balance', requireAdmin, async (req, res) => {
     res.json({ success: false, error: 'Ошибка обновления баланса' });
   }
 });
+
+// Show user orders page
+router.get('/users/:userId/orders', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Get user info
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, username: true, balance: true }
+    });
+    
+    if (!user) {
+      return res.status(404).send('Пользователь не найден');
+    }
+    
+    // Get user's orders
+    const orders = await prisma.orderRequest.findMany({
+      where: { userId },
+      orderBy: [
+        { status: 'asc' }, // NEW заказы сначала
+        { createdAt: 'desc' }
+      ]
+    });
+    
+    // Group orders by status
+    const ordersByStatus = {
+      NEW: orders.filter(order => order.status === 'NEW'),
+      PROCESSING: orders.filter(order => order.status === 'PROCESSING'),
+      COMPLETED: orders.filter(order => order.status === 'COMPLETED'),
+      CANCELLED: orders.filter(order => order.status === 'CANCELLED')
+    };
+    
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Заказы ${user.firstName || 'пользователя'}</title>
+        <meta charset="utf-8">
+        <style>
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            margin: 0; padding: 20px; background: #f5f5f5; 
+          }
+          .container { 
+            max-width: 1200px; margin: 0 auto; background: white; 
+            border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            overflow: hidden; 
+          }
+          .header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; padding: 30px; text-align: center; 
+          }
+          .back-btn { 
+            background: #6c757d; color: white; text-decoration: none; 
+            padding: 10px 20px; border-radius: 6px; 
+            display: inline-block; margin-bottom: 20px; 
+          }
+          .back-btn:hover { background: #5a6268; }
+          .content { padding: 30px; }
+          
+          .status-section { margin-bottom: 30px; }
+          .status-header { 
+            font-size: 20px; font-weight: bold; margin-bottom: 15px; 
+            padding: 10px 15px; border-radius: 8px; display: flex; 
+            align-items: center; gap: 10px; 
+          }
+          .status-header.new { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+          .status-header.processing { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+          .status-header.completed { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+          .status-header.cancelled { background: #e2e3e5; color: #383d41; border-left: 4px solid #6c757d; }
+          
+          .orders-grid { display: grid; gap: 15px; }
+          .order-card { 
+            background: #f8f9fa; border: 1px solid #dee2e6; 
+            border-radius: 8px; padding: 20px; transition: all 0.2s ease; 
+          }
+          .order-card.new { 
+            border-left: 4px solid #dc3545; 
+            background: linear-gradient(135deg, #fff5f5 0%, #f8f9fa 100%); 
+          }
+          .order-card.processing { border-left: 4px solid #ffc107; }
+          .order-card.completed { border-left: 4px solid #28a745; }
+          .order-card.cancelled { border-left: 4px solid #6c757d; }
+          
+          .order-header { 
+            display: flex; justify-content: space-between; 
+            align-items: flex-start; margin-bottom: 15px; 
+          }
+          .order-info h4 { margin: 0; font-size: 18px; color: #212529; }
+          .order-info p { margin: 5px 0 0 0; color: #6c757d; font-size: 14px; }
+          .order-status { 
+            padding: 4px 12px; border-radius: 12px; 
+            font-size: 12px; font-weight: 600; 
+          }
+          .order-status.new { background: #dc3545; color: white; }
+          .order-status.processing { background: #ffc107; color: #212529; }
+          .order-status.completed { background: #28a745; color: white; }
+          .order-status.cancelled { background: #6c757d; color: white; }
+          
+          .order-details { margin-bottom: 15px; }
+          .order-items { margin-bottom: 10px; }
+          .order-item { 
+            display: flex; justify-content: space-between; 
+            padding: 5px 0; border-bottom: 1px solid #e9ecef; 
+          }
+          .order-total { 
+            font-weight: bold; font-size: 16px; 
+            color: #28a745; text-align: right; 
+          }
+          
+          .empty-state { text-align: center; padding: 40px; color: #6c757d; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>📦 Заказы пользователя</h1>
+            <p>${user.firstName || 'Пользователь'} ${user.lastName || ''} (@${user.username || 'без username'})</p>
+          </div>
+          
+          <div class="content">
+            <a href="/admin" class="back-btn">← Назад к админ-панели</a>
+            
+            ${ordersByStatus.NEW.length > 0 ? `
+              <div class="status-section">
+                <div class="status-header new">
+                  🔴 Новые заказы (${ordersByStatus.NEW.length})
+                </div>
+                <div class="orders-grid">
+                  ${ordersByStatus.NEW.map(order => createUserOrderCard(order)).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${ordersByStatus.PROCESSING.length > 0 ? `
+              <div class="status-section">
+                <div class="status-header processing">
+                  🟡 Заказы в обработке (${ordersByStatus.PROCESSING.length})
+                </div>
+                <div class="orders-grid">
+                  ${ordersByStatus.PROCESSING.map(order => createUserOrderCard(order)).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${ordersByStatus.COMPLETED.length > 0 ? `
+              <div class="status-section">
+                <div class="status-header completed">
+                  🟢 Завершенные заказы (${ordersByStatus.COMPLETED.length})
+                </div>
+                <div class="orders-grid">
+                  ${ordersByStatus.COMPLETED.map(order => createUserOrderCard(order)).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${ordersByStatus.CANCELLED.length > 0 ? `
+              <div class="status-section">
+                <div class="status-header cancelled">
+                  ⚫ Отмененные заказы (${ordersByStatus.CANCELLED.length})
+                </div>
+                <div class="orders-grid">
+                  ${ordersByStatus.CANCELLED.map(order => createUserOrderCard(order)).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${orders.length === 0 ? `
+              <div class="empty-state">
+                <h3>📭 Нет заказов</h3>
+                <p>У этого пользователя пока нет заказов</p>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('❌ User orders page error:', error);
+    res.status(500).send('Ошибка загрузки заказов пользователя');
+  }
+});
+
+// Create user order card HTML
+function createUserOrderCard(order: any) {
+  const items = JSON.parse((order.itemsJson as string) || '[]');
+  const totalAmount = items.reduce((sum: number, item: any) => sum + (item.price || 0) * (item.quantity || 1), 0);
+  
+  return `
+    <div class="order-card ${order.status.toLowerCase()}">
+      <div class="order-header">
+        <div class="order-info">
+          <h4>Заказ #${order.id.slice(-8)}</h4>
+          <p>Дата: ${new Date(order.createdAt).toLocaleString('ru-RU')}</p>
+        </div>
+        <div class="order-status ${order.status.toLowerCase()}">
+          ${getStatusDisplayName(order.status)}
+        </div>
+      </div>
+      
+      <div class="order-details">
+        <div class="order-items">
+          ${items.map((item: any) => `
+            <div class="order-item">
+              <span>${item.title} x${item.quantity}</span>
+              <span>${(item.price * item.quantity).toFixed(2)} PZ</span>
+            </div>
+          `).join('')}
+        </div>
+        
+        <div class="order-total">
+          Итого: ${totalAmount.toFixed(2)} PZ
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function getStatusDisplayName(status: string) {
+  const names = {
+    'NEW': '🔴 Новый',
+    'PROCESSING': '🟡 В обработке',
+    'COMPLETED': '🟢 Готово',
+    'CANCELLED': '⚫ Отмена'
+  };
+  return names[status as keyof typeof names] || status;
+}
 
 // Mount orders module
 router.use('/', ordersModule);
