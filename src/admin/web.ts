@@ -5321,9 +5321,9 @@ function getStatusDisplayName(status: string) {
                     <p><strong>Код реферала:</strong> ${partnerProfile.referralCode}</p>
                     <p><strong>Тип программы:</strong> ${partnerProfile.programType}</p>
                     <p><strong>Баланс:</strong> ${partnerProfile.balance || 0} PZ</p>
-                    ${partnerProfile.activatedAt ? `<p><strong>Активирован:</strong> ${partnerProfile.activatedAt.toLocaleString('ru-RU')}</p>` : ''}
-                    ${partnerProfile.expiresAt ? `<p><strong>Истекает:</strong> ${partnerProfile.expiresAt.toLocaleString('ru-RU')}</p>` : ''}
-                    <p><strong>Тип активации:</strong> ${partnerProfile.activationType || 'Не указан'}</p>
+                    ${(partnerProfile as any).activatedAt ? `<p><strong>Активирован:</strong> ${(partnerProfile as any).activatedAt.toLocaleString('ru-RU')}</p>` : ''}
+                    ${(partnerProfile as any).expiresAt ? `<p><strong>Истекает:</strong> ${(partnerProfile as any).expiresAt.toLocaleString('ru-RU')}</p>` : ''}
+                    <p><strong>Тип активации:</strong> ${(partnerProfile as any).activationType || 'Не указан'}</p>
                   </div>
                 ` : '<p>Партнерский профиль не создан</p>'}
               </div>
