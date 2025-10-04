@@ -2865,7 +2865,7 @@ router.get('/products', requireAdmin, async (req, res) => {
             transition: all 0.2s ease; background: #ffffff;
           }
           .switch-row:hover { border-color: #667eea; background: #f8fafc; }
-          .switch-row input[type="checkbox"] { display: none; }
+          .switch-row input[type="checkbox"], .status-row input[type="checkbox"] { display: none; }
           .switch-slider { 
             width: 48px; height: 28px; background: #cbd5e1; 
             border-radius: 14px; position: relative; transition: all 0.3s ease; 
@@ -2876,10 +2876,12 @@ router.get('/products', requireAdmin, async (req, res) => {
             width: 22px; height: 22px; background: white; border-radius: 50%; 
             transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
           }
-          .switch-row input[type="checkbox"]:checked + .switch-slider { 
+          .switch-row input[type="checkbox"]:checked + .switch-slider,
+          .status-row input[type="checkbox"]:checked + .switch-slider { 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
           }
-          .switch-row input[type="checkbox"]:checked + .switch-slider::before { 
+          .switch-row input[type="checkbox"]:checked + .switch-slider::before,
+          .status-row input[type="checkbox"]:checked + .switch-slider::before { 
             transform: translateX(20px); 
           }
           .switch-label { font-weight: 600; color: #374151; }
@@ -3214,6 +3216,21 @@ router.get('/products', requireAdmin, async (req, res) => {
               const rubPrice = parseFloat(this.value) || 0;
               const pzPrice = rubPrice / 100;
               document.getElementById('editProductPrice').value = pzPrice.toFixed(2);
+            });
+            
+            // Fix checkbox functionality for regions and status
+            const regionCheckboxes = ['editProductRussia', 'editProductBali', 'editProductStatus'];
+            regionCheckboxes.forEach(id => {
+              const checkbox = document.getElementById(id);
+              const switchRow = checkbox.closest('.switch-row') || checkbox.closest('.status-row');
+              
+              if (switchRow) {
+                switchRow.addEventListener('click', function(e) {
+                  e.preventDefault();
+                  checkbox.checked = !checkbox.checked;
+                  checkbox.dispatchEvent(new Event('change'));
+                });
+              }
             });
             
             // Show modal
